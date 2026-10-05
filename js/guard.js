@@ -1,249 +1,111 @@
 (function () {
   "use strict";
 
-  const state = {
-    triggered: false,
-    overlay: null,
-    originalTitle: document.title,
-    watchdog: null
-  };
+  var PHRASES = [
+    "มึงจะหา bypass ทำไม คีย์กูแจกฟรีอยู่แล้ว สมองมีไว้คิดหรือมีไว้ประดับ",
+    "เปิด F12 มาหวังอะไร คิดว่ากูโง่เหรอ เขียนโค้ดมากี่ปีมึงรู้ป่าว",
+    "ขโมยของฟรีไม่ละอายใจ ครอบครัวมึงสอนมารึเปล่า",
+    "กูเขียนฟรีให้เพราะอยากแจก แต่มีพวกแบบมึงนี่แหละที่ทำให้คนเลิกทำ",
+    "มึงคิดว่ากูไม่เห็นเหรอ ทุกอย่างที่มึงกดมัน log หมด",
+    "หาประโยชน์จากของฟรี อนาคตมึงจะไปรอดไหม",
+    "สมองมึงเอาไว้ทำอะไร คิดหากินกับของฟรีหรือไง",
+    "กูอุตส่าห์เสียเวลาทำให้ แล้วมึงมาแบบนี้ ใจมึงทำด้วยอะไร",
+    "เด็กสมัยนี้แจกฟรียังไม่พอใจ อยากได้มากกว่านี้อีก",
+    "อย่ามาเถียง อย่ามาอ้าง มึงรู้ตัวว่ากำลังทำอะไรอยู่"
+  ];
 
-  const config = {
-    sizeThreshold: 160,
-    checkInterval: 700,
-    debuggerInterval: 1200,
-    probeInterval: 1000,
-    allowedStorageKeys: [
-      "getkey_cooldown_until",
-      "getkey_hwid",
-      "getkey_key",
-      "getkey_discord_user",
-      "getkey_oauth_state",
-      "getkey_access_token"
-    ]
-  };
+  var S1 = "color:#ef4444;font-size:26px;font-weight:900;text-shadow:0 0 20px #ef4444;padding:6px 0;";
+  var S2 = "color:#fca5a5;font-size:15px;font-weight:800;padding:3px 0;";
+  var S3 = "color:#71717a;font-size:12px;font-style:italic;padding:1px 0;";
+  var S4 = "color:#52525b;font-size:11px;font-family:monospace;padding:1px 0;";
 
-  const overlayStyles = `
-    position: fixed;
-    inset: 0;
-    z-index: 2147483647;
-    background: #08090a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    font-family: system-ui, -apple-system, sans-serif;
-    text-align: center;
-    color: #fafafa;
-    animation: guardFade .2s ease;
-  `;
+  var fired = false;
 
-  const overlayMarkup = `
-    <div style="max-width:420px">
-      <div style="font-size:56px;margin-bottom:20px;animation:guardPulse 1s ease infinite">🚫</div>
-      <div style="font-size:22px;font-weight:800;color:#f87171;margin-bottom:12px;letter-spacing:-0.02em">
-        Close DevTools to continue
-      </div>
-      <div style="font-size:14px;color:#a1a1aa;line-height:1.7;margin-bottom:20px">
-        This page requires DevTools to be closed.<br>Reload after closing it.
-      </div>
-      <div style="font-size:11px;color:#52525b;padding:8px 14px;background:#18181b;border:1px solid #27272a;border-radius:8px;display:inline-block;font-family:monospace">
-        Press F5 or reopen the tab
-      </div>
-    </div>
-  `;
+  function stamp() {
+    if (fired) return;
+    fired = true;
 
-  const overlayCSS = `
-    @keyframes guardFade { from { opacity: 0 } to { opacity: 1 } }
-    @keyframes guardPulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.08) } }
-  `;
+    try { console.clear(); } catch (e) {}
 
-  function injectStyles() {
-    if (document.getElementById("__guard_styles")) return;
-    const tag = document.createElement("style");
-    tag.id = "__guard_styles";
-    tag.textContent = overlayCSS;
-    document.head.appendChild(tag);
-  }
-
-  function showOverlay() {
-    if (state.overlay) return;
-    injectStyles();
-
-    const el = document.createElement("div");
-    el.id = "__guard_overlay";
-    el.style.cssText = overlayStyles;
-    el.innerHTML = overlayMarkup;
-
-    document.body.appendChild(el);
-    state.overlay = el;
-    document.title = "\u26D4 SECURITY";
-
-    if (document.body) {
-      document.body.style.overflow = "hidden";
-    }
-  }
-
-  function hideOverlay() {
-    if (state.overlay && state.overlay.parentNode) {
-      state.overlay.parentNode.removeChild(state.overlay);
-    }
-    state.overlay = null;
-    document.title = state.originalTitle;
-
-    if (document.body) {
-      document.body.style.overflow = "";
-    }
-  }
-
-  function trip() {
-    if (state.triggered) return;
-    state.triggered = true;
-    showOverlay();
     try {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
+      console.log("%c ", S1);
+      console.log("%c   หยุดตรงนี้เลยไอ้สัส", S1);
+      console.log("%c   กูเขียนฟรีให้ มึงจะมาแกะทำไม", S2);
+      console.log("%c   อ่านให้ครบทุกบรรทัด แล้วสำนึกซะ", S2);
+      console.log("%c ", S1);
     } catch (e) {}
-  }
 
-  function untrip() {
-    if (!state.triggered) return;
-    state.triggered = false;
-    hideOverlay();
-  }
-
-  function detectWindowSize() {
-    const dw = window.outerWidth - window.innerWidth;
-    const dh = window.outerHeight - window.innerHeight;
-    return dw > config.sizeThreshold || dh > config.sizeThreshold;
-  }
-
-  function detectDebuggerTiming() {
-    const start = performance.now();
-    // eslint-disable-next-line no-debugger
-    debugger;
-    const end = performance.now();
-    return end - start > 100;
-  }
-
-  function startSizeWatcher() {
-    const check = function () {
-      if (detectWindowSize()) trip();
-      else untrip();
-    };
-    setInterval(check, config.checkInterval);
-    window.addEventListener("resize", check);
-  }
-
-  function startDebuggerWatcher() {
-    setInterval(function () {
-      if (detectDebuggerTiming()) trip();
-    }, config.debuggerInterval);
-  }
-
-  function startConsoleProbe() {
-    const probe = /./;
-    probe.toString = function () {
-      trip();
-      return "";
-    };
-
-    setInterval(function () {
+    PHRASES.forEach(function (line, i) {
       try {
-        // eslint-disable-next-line no-console
-        console.log(probe);
+        console.log("%c" + line, i % 2 ? S3 : S4);
       } catch (e) {}
-    }, config.probeInterval);
+    });
+
+    try {
+      console.log("%c ", S3);
+      console.log("%c อย่ามีหน้าทำแบบนี้อีกนะมึง เข้าใจไหม", S2);
+      console.log("%c ", S3);
+    } catch (e) {}
   }
 
-  function blockDevtoolsKeys() {
-    document.addEventListener("keydown", function (event) {
-      const key = (event.key || "").toUpperCase();
+  setInterval(function () {
+    if (!fired) return;
+    try {
+      var t = performance.now();
+      console.log("%cยังอยู่ ยังไม่สำนึก ยังไม่หยุด :)", S3);
+      if (performance.now() - t > 60) stamp();
+    } catch (e) {}
+  }, 2000);
 
-      if (event.key === "F12" || event.keyCode === 123) {
-        event.preventDefault();
-        return false;
-      }
-
-      if (event.ctrlKey && event.shiftKey && ["I", "J", "C"].includes(key)) {
-        event.preventDefault();
-        return false;
-      }
-
-      if (event.metaKey && event.altKey && ["I", "J", "C"].includes(key)) {
-        event.preventDefault();
-        return false;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && ["U", "S"].includes(key)) {
-        event.preventDefault();
-        return false;
-      }
-    }, true);
+  function probe() {
+    var gw = window.outerWidth - window.innerWidth;
+    var gh = window.outerHeight - window.innerHeight;
+    if (gw > 160 || gh > 160) stamp();
   }
 
-  function blockContextMenu() {
-    document.addEventListener("contextmenu", function (event) {
-      event.preventDefault();
+  setInterval(probe, 700);
+  window.addEventListener("resize", probe);
+
+  setInterval(function () {
+    var s = performance.now();
+    debugger;
+    if (performance.now() - s > 80) stamp();
+  }, 1200);
+
+  var decoy = /x/;
+  decoy.toString = function () { stamp(); return "x"; };
+  setInterval(function () {
+    try { console.log(decoy); } catch (e) {}
+  }, 1400);
+
+  var node = document.createElement("div");
+  Object.defineProperty(node, "id", {
+    get: function () { stamp(); return ""; }
+  });
+  setInterval(function () {
+    try { console.log(node); } catch (e) {}
+  }, 1700);
+
+  document.addEventListener("keydown", function (ev) {
+    var k = (ev.key || "").toUpperCase();
+    if (ev.key === "F12" || ev.keyCode === 123) {
+      ev.preventDefault();
+      stamp();
       return false;
-    }, true);
-  }
-
-  function blockSelection() {
-    document.addEventListener("selectstart", function (event) {
-      event.preventDefault();
-    }, true);
-    document.addEventListener("dragstart", function (event) {
-      event.preventDefault();
-    }, true);
-  }
-
-  function lockStorage() {
-    try {
-      const original = Storage.prototype.setItem;
-      const allowed = config.allowedStorageKeys;
-      Storage.prototype.setItem = function (key, value) {
-        if (allowed.indexOf(key) === -1) return;
-        return original.call(this, key, value);
-      };
-    } catch (e) {}
-  }
-
-  function blockIframe() {
-    if (window.top !== window.self) {
-      try {
-        window.top.location = window.self.location;
-      } catch (e) {
-        document.body.innerHTML = "<h1>Access Denied</h1>";
-      }
     }
-  }
+    if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && "IJC".indexOf(k) > -1) {
+      ev.preventDefault();
+      stamp();
+      return false;
+    }
+    if ((ev.ctrlKey || ev.metaKey) && (k === "U" || k === "S")) {
+      ev.preventDefault();
+      stamp();
+      return false;
+    }
+  }, true);
 
-  function freezeCoreApis() {
-    try {
-      Object.defineProperty(window, "GetkeyAuth", {
-        configurable: false,
-        writable: false
-      });
-      Object.defineProperty(window, "GetkeyCooldown", {
-        configurable: false,
-        writable: false
-      });
-    } catch (e) {}
-  }
-
-  function init() {
-    blockDevtoolsKeys();
-    blockContextMenu();
-    blockSelection();
-    blockIframe();
-    lockStorage();
-    startSizeWatcher();
-    startDebuggerWatcher();
-    startConsoleProbe();
-
-    window.addEventListener("load", freezeCoreApis);
-  }
-
-  init();
+  document.addEventListener("contextmenu", function (ev) {
+    ev.preventDefault();
+  }, true);
 })();
