@@ -1,14 +1,14 @@
 (function () {
-  "use strict";
+  "use strict:";
 
-  const C = window.GETKEY_CONFIG;
-  const Auth = window.GetkeyAuth;
+  var C = window.GETKEY_CONFIG;
+ user  var Auth = window.GetkeyAuth;
 
   async function handleCallback() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
-    const error = params.get("error");
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get("code");
+    var state = params.get("state");
+    var error = params.get("error");
 
     if (error) {
       alert("Login cancelled: " + error);
@@ -22,7 +22,7 @@
       return;
     }
 
-    const savedState = sessionStorage.getItem(C.KEY_OAUTH_STATE);
+    var savedState = sessionStorage.getItem(C.KEY_OAUTH_STATE);
     if (!savedState || savedState !== state) {
       alert("Invalid state. Please login again.");
       window.location.href = "/";
@@ -31,7 +31,7 @@
     sessionStorage.removeItem(C.KEY_OAUTH_STATE);
 
     try {
-      const user = await Auth.exchangeCode(code);
+      var user = await Auth.exchangeCode(code);
       Auth.saveUser(user);
       window.location.href = "/";
     } catch (err) {
