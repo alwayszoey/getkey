@@ -4,7 +4,6 @@
   const C = window.GETKEY_CONFIG;
 
   const Cooldown = {
-    // ===== HWID =====
     getHWID() {
       let hwid = localStorage.getItem(C.KEY_HWID);
       if (!hwid) {
@@ -16,12 +15,14 @@
 
     _generateHWID() {
       const raw = [
-        navigator.userAgent, navigator.language,
+        navigator.userAgent,
+        navigator.language,
         screen.width + "x" + screen.height,
         screen.colorDepth,
         new Date().getTimezoneOffset(),
         navigator.hardwareConcurrency || 0
       ].join("|");
+
       let hash = 0;
       for (let i = 0; i < raw.length; i++) {
         hash = ((hash << 5) - hash) + raw.charCodeAt(i);
@@ -46,7 +47,11 @@
     getKeyData() {
       const raw = localStorage.getItem(C.KEY_DATA);
       if (!raw) return null;
-      try { return JSON.parse(raw); } catch (e) { return null; }
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
     },
 
     saveKeyData(data) {
@@ -84,7 +89,7 @@
 
     generateKey(type) {
       const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-      const seg = (n) => {
+      const seg = function (n) {
         let s = "";
         for (let i = 0; i < n; i++) {
           s += chars[Math.floor(Math.random() * chars.length)];
@@ -114,8 +119,9 @@
     },
 
     resetHWID() {
-      const newHwid = this._generateHWID() + "-" +
-                      Math.random().toString(36).slice(2, 6).toUpperCase();
+      const newHwid =
+        this._generateHWID() + "-" +
+        Math.random().toString(36).slice(2, 6).toUpperCase();
       localStorage.setItem(C.KEY_HWID, newHwid);
       this.clearKeyData();
       this.clearCooldown();
