@@ -1,15 +1,15 @@
 (function () {
   "use strict";
 
-  const C = window.GETKEY_CONFIG;
+  var C = window.GETKEY_CONFIG;
 
-  const Auth = {
-    buildLoginURL() {
-      const state = Math.random().toString(36).slice(2) +
-                    Math.random().toString(36).slice(2);
+  var Auth = {
+    buildLoginURL: function () {
+      var state = Math.random().toString(36).slice(2) +
+                  Math.random().toString(36).slice(2);
       sessionStorage.setItem(C.KEY_OAUTH_STATE, state);
 
-      const params = new URLSearchParams({
+      var params = new URLSearchParams({
         client_id: C.DISCORD_CLIENT_ID,
         redirect_uri: C.DISCORD_REDIRECT_URI,
         response_type: "code",
@@ -21,32 +21,45 @@
       return "https://discord.com/oauth2/authorize?" + params.toString();
     },
 
-    login() {
+    login: function () {
       window.location.href = this.buildLoginURL();
     },
 
-    logout() {
+    logout: function () {
+      var user = this.getUser();
+
+      if (user && user.id) {
+        try {
+          fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ discordId: user.id }),
+            keepalive: true
+          });
+        } catch (e) {}
+      }
+
       localStorage.removeItem(C.KEY_DISCORD);
       localStorage.removeItem(C.KEY_ACCESS_TOKEN);
     },
 
-    getUser() {
-      const raw = localStorage.getItem(C.KEY_DISCORD);
+    getUser: function () {
+      var raw = localStorage.getItem(C.KEY_DISCORD);
       if (!raw) return null;
       try {
-        const u = JSON.parse(raw);
+        var u = JSON.parse(raw);
         return u && u.id ? u : null;
       } catch (e) {
         return null;
       }
     },
 
-    isLoggedIn() {
+    isLoggedIn: function () {
       return !!this.getUser();
     },
 
-    async exchangeCode(code) {
-      const res = await fetch("/api/auth/exchange", {
+    exchangeCode: async function (code) {
+      var res = await fetch("/api/auth/exchange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -55,14 +68,11 @@
         })
       });
 
-      const data = await res.json().catch(function () {
-        return {};
-      });
+      var data = await res.json().catch(function () { return {}; });
 
       if (!res.ok) {
         throw new Error(data.error || "Exchange failed: " + res.status);
       }
-
       if (!data.user || !data.user.id) {
         throw new Error("Invalid user data from server");
       }
@@ -70,8 +80,21 @@
       return data.user;
     },
 
-    saveUser(user) {
+    saveUser: function (user) {
       localStorage.setItem(C.KEY_DISCORD, JSON.stringify(user));
+    },
+
+    fetchHistory: async function () {
+      var user = this.getUser();
+      if (!user) return [];
+
+      try {
+        var res = await fetch("/api/auth/history?discordId=" + encodeURIComponent(user.id));
+        var data = await res.json();
+        return data.items || [];
+      } catch (e) {
+        return [];
+      }
     }
   };
 
