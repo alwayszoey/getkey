@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reset HWID — Getkey</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/guard.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/cooldown.js"></script>
+</head>
+<body>
+
+<div class="wrapper">
+  <div class="card">
+    <div class="header">
+      <div class="brand">
+        <div class="logo" style="background:#dc2626;box-shadow:0 8px 20px -6px rgba(220,38,38,0.6);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+            <path d="M3 3v5h5"/>
+          </svg>
+        </div>
+        <div class="brand-name">Reset <span style="color:#f87171;">HWID</span></div>
+      </div>
+      <span class="tag">UNBIND</span>
+    </div>
+
+    <div class="info-box" style="border-color:rgba(220,38,38,0.3);background:rgba(220,38,38,0.06);">
+      <div class="info-icon" style="background:rgba(220,38,38,0.1);border-color:rgba(220,38,38,0.3);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div>
+        <p>Reset HWID will unbind your key from current device</p>
+        <p>Use when: changing device or key bound to old HWID</p>
+      </div>
+    </div>
+
+    <label class="label">Current HWID</label>
+    <div class="input" style="font-family:'Courier New',monospace;font-size:12px;" id="currentHwid">-</div>
+
+    <div style="height:16px;"></div>
+
+    <button class="btn-primary" id="resetBtn" style="background:#dc2626;border-color:rgba(220,38,38,0.6);box-shadow:0 4px 14px -3px rgba(220,38,38,0.4);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+        <path d="M3 3v5h5"/>
+      </svg>
+      <span id="resetBtnText">Reset HWID</span>
+    </button>
+
+    <div style="height:10px;"></div>
+
+    <a href="/" class="btn-outline">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+      </svg>
+      <span>Back</span>
+    </a>
+  </div>
+</div>
+
+<script>
+(function () {
+  const Auth = window.GetkeyAuth;
+  const CD = window.GetkeyCooldown;
+
+  const currentHwidEl = document.getElementById("currentHwid");
+  const resetBtn = document.getElementById("resetBtn");
+  const resetBtnText = document.getElementById("resetBtnText");
+
+  if (!Auth.isLoggedIn()) {
+    window.location.href = "/";
+    return;
+  }
+
+  const user = Auth.getUser();
+  currentHwidEl.textContent = CD.getHWID();
+
+  resetBtn.addEventListener("click", async function () {
+    if (!confirm("Reset HWID? Your current key will be revoked.")) return;
+
+    resetBtn.disabled = true;
+    resetBtnText.textContent = "Resetting...";
+
+    const oldHwid = CD.getHWID();
+    const newHwid = CD.resetHWID();
+
+    try {
+      await fetch("/api/key/reset-hwid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discordId: user.id,
+          oldHwid: oldHwid,
+          newHwid: newHwid
+        })
+      });
+
+      currentHwidEl.textContent = newHwid;
+      resetBtnText.textContent = "Done";
+      setTimeout(function () {
+        window.location.href = "/";
+      }, 1200);
+    } catch (e) {
+      alert("Network error");
+      resetBtn.disabled = false;
+      resetBtnText.textContent = "Reset HWID";
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
