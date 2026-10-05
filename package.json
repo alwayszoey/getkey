@@ -2,5 +2,7 @@
   "name": "getkey",
   "version": "1.0.0",
   "private": true,
-  "description": "Getkey static site"
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  }
 }
