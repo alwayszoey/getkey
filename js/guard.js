@@ -29,7 +29,7 @@
 
     try {
       console.log("%c ", S1);
-      console.log("%c   หยุดตรงนี้เลยไอ้สัส", S1);
+      console.log("%c   หยุดตรงนี้เลย", S1);
       console.log("%c   กูเขียนฟรีให้ มึงจะมาแกะทำไม", S2);
       console.log("%c   อ่านให้ครบทุกบรรทัด แล้วสำนึกซะ", S2);
       console.log("%c ", S1);
