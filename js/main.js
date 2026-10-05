@@ -15,7 +15,6 @@
   const userName = document.getElementById("userName");
   const userTag = document.getElementById("userTag");
   const userAvatar = document.getElementById("userAvatar");
-
   const keyDisplay = document.getElementById("keyDisplay");
   const keyStatus = document.getElementById("keyStatus");
   const keyMeta = document.getElementById("keyMeta");
@@ -30,9 +29,12 @@
 
   function applyDiscordUser(user) {
     userName.textContent = user.username || "-";
-    userTag.textContent = user.discriminator && user.discriminator !== "0"
-      ? "#" + user.discriminator
-      : (user.global_name ? "@" + user.global_name : "");
+    userTag.textContent =
+      user.discriminator && user.discriminator !== "0"
+        ? "#" + user.discriminator
+        : user.global_name
+        ? "@" + user.global_name
+        : "";
     userAvatar.style.background = user.avatarColor || "#5865f2";
     userAvatar.textContent = (user.username || "?").charAt(0).toUpperCase();
   }
@@ -54,7 +56,8 @@
         metaHwid.textContent = meta.hwid || "-";
       }
     } else {
-      keyDisplay.innerHTML = '<span class="key-placeholder">XXXX-XXXX-XXXX-XXXX</span>';
+      keyDisplay.innerHTML =
+        '<span class="key-placeholder">XXXX-XXXX-XXXX-XXXX</span>';
       keyDisplay.classList.remove("issued");
       copyBtn.disabled = true;
       keyStatus.textContent = "Ready";
@@ -84,7 +87,9 @@
 
   async function checkRemoteStatus(discordId) {
     try {
-      const res = await fetch("/api/key/status?discordId=" + encodeURIComponent(discordId));
+      const res = await fetch(
+        "/api/key/status?discordId=" + encodeURIComponent(discordId)
+      );
       const data = await res.json();
 
       if (data.locked) {
