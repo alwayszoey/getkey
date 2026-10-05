@@ -1,75 +1,70 @@
 (function () {
   "use strict";
 
-  const Auth = window.GetkeyAuth;
-  const CD = window.GetkeyCooldown;
+  var Auth = window.GetkeyAuth;
+  var HWID = window.GetkeyHWID;
+  var Time = window.GetkeyTime;
 
-  const loginBox = document.getElementById("loginBox");
-  const contentBox = document.getElementById("contentBox");
-  const countdownEl = document.getElementById("countdown");
-  const timerEl = document.getElementById("timer");
-  const btn = document.getElementById("getkeyBtn");
-  const btnText = document.getElementById("btnText");
-  const btnIcon = document.getElementById("btnIcon");
-  const btnSpinner = document.getElementById("btnSpinner");
-  const discordBtn = document.getElementById("discordBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
-  const userName = document.getElementById("userName");
-  const userTag = document.getElementById("userTag");
-  const userAvatar = document.getElementById("userAvatar");
-  const keyDisplay = document.getElementById("keyDisplay");
-  const keyStatus = document.getElementById("keyStatus");
-  const keyMeta = document.getElementById("keyMeta");
-  const metaType = document.getElementById("metaType");
-  const metaExpires = document.getElementById("metaExpires");
-  const metaHwid = document.getElementById("metaHwid");
-  const copyBtn = document.getElementById("copyBtn");
+  var $ = function (id) { return document.getElementById(id); };
 
-  let selectedType = "1day";
-  let timerInterval = null;
-  let currentKey = null;
+  var loginBox = $("loginBox");
+  var contentBox = $("contentBox");
+  var countdownEl = $("countdown");
+  var timerEl = $("timer");
+  var btn = $("getkeyBtn");
+  var btnText = $("btnText");
+  var btnIcon = $("btnIcon");
+  var btnSpinner = $("btnSpinner");
+  var discordBtn = $("discordBtn");
+  var logoutBtn = $("logoutBtn");
+  var userName = $("userName");
+  var userTag = $("userTag");
+  var userAvatar = $("userAvatar");
+  var keyDisplay = $("keyDisplay");
+  var keyStatus = $("keyStatus");
+  var keyMeta = $("keyMeta");
+  var metaType = $("metaType");
+  var metaExpires = $("metaExpires");
+  var metaHwid = $("metaHwid");
+  var copyBtn = $("copyBtn");
 
-  function setLoading(isLoading) {
-    if (isLoading) {
-      btnIcon.style.display = "none";
-      btnSpinner.style.display = "inline-flex";
-    } else {
-      btnIcon.style.display = "inline-flex";
-      btnSpinner.style.display = "none";
-    }
+  var currentKey = null;
+  var timer = null;
+
+  function setLoading(on) {
+    btnIcon.style.display = on ? "none" : "inline-flex";
+    btnSpinner.style.display = on ? "inline-flex" : "none";
   }
 
-  function applyDiscordUser(user) {
+  function paintUser(user) {
     userName.textContent = user.username || "-";
-    userTag.textContent =
-      user.discriminator && user.discriminator !== "0"
-        ? "#" + user.discriminator
-        : user.global_name
-        ? "@" + user.global_name
-        : "";
+    userTag.textContent = user.discriminator && user.discriminator !== "0"
+      ? "#" + user.discriminator
+      : (user.global_name ? "@" + user.global_name : "");
     userAvatar.style.background = user.avatarColor || "#5865f2";
     userAvatar.textContent = (user.username || "?").charAt(0).toUpperCase();
   }
 
-  function setKeyDisplay(key, meta) {
+  function paintKey(key, meta) {
     currentKey = key;
+
     if (key) {
       keyDisplay.innerHTML = '<span class="key-text">' + key + "</span>";
       keyDisplay.classList.add("issued");
       copyBtn.disabled = false;
       keyStatus.textContent = "Issued";
       keyStatus.className = "key-card-status ready";
+
       if (meta) {
         keyMeta.style.display = "flex";
         metaType.textContent = meta.type || "-";
         metaExpires.textContent = meta.expireAt
           ? new Date(meta.expireAt).toLocaleString("en-US")
           : "-";
-        metaHwid.textContent = meta.hwid || "-";
+        metaHwid.textContent = HWID.get();
       }
     } else {
-      keyDisplay.innerHTML =
-        '<span class="key-placeholder">XXXX-XXXX-XXXX-XXXX</span>';
+      keyDisplay.innerHTML = '<span class="key-placeholder">XXXX-XXXX-XXXX-XXXX</span>';
       keyDisplay.classList.remove("issued");
       copyBtn.disabled = true;
       keyStatus.textContent = "Ready";
@@ -78,78 +73,80 @@
     }
   }
 
-  function setStatusLocked() {
+  function paintLocked() {
     keyStatus.textContent = "Locked";
     keyStatus.className = "key-card-status locked";
   }
 
+  function stopTimer() {
+    if (timer) clearInterval(timer);
+    timer = null;
+    countdownEl.style.display = "none";
+    btn.disabled = false;
+    btnText.textContent = "Get key";
+  }
+
+  function runTimer(unlockAt) {
+    countdownEl.style.display = "flex";
+    btn.disabled = true;
+    btnText.textContent = "Locked";
+
+    if (timer) clearInterval(timer);
+
+    function tick() {
+      var left = unlockAt - Date.now();
+      if (left <= 0) {
+        stopTimer();
+        paintKey(null);
+        return;
+      }
+      timerEl.textContent = Time.format(left);
+    }
+
+    tick();
+    timer = setInterval(tick, 1000);
+  }
+
+  async function loadStatus() {
+    var session = Auth.getSession();
+    if (!session) return;
+
+    keyStatus.textContent = "Loading";
+    keyStatus.className = "key-card-status";
+
+    try {
+      var res = await fetch("/api/key/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session })
+      });
+
+      var data = await res.json();
+
+      if (data.locked) {
+        paintLocked();
+        runTimer(data.unlockAt);
+      } else {
+        paintKey(null);
+        stopTimer();
+      }
+    } catch (e) {
+      paintKey(null);
+    }
+  }
+
   function showLoggedIn() {
-    const user = Auth.getUser();
+    var user = Auth.getUser();
     if (!user) return showLoggedOut();
-    applyDiscordUser(user);
+    paintUser(user);
     loginBox.style.display = "none";
     contentBox.style.display = "block";
-    checkRemoteStatus(user.id);
+    loadStatus();
   }
 
   function showLoggedOut() {
     loginBox.style.display = "block";
     contentBox.style.display = "none";
-  }
-
-  async function checkRemoteStatus(discordId) {
-    keyStatus.textContent = "Loading";
-    keyStatus.className = "key-card-status";
-
-    try {
-      const res = await fetch(
-        "/api/key/status?discordId=" + encodeURIComponent(discordId)
-      );
-      const data = await res.json();
-
-      if (data.locked) {
-        setKeyDisplay(data.key, { type: data.type, expireAt: data.unlockAt });
-        setStatusLocked();
-        startCountdownUI(data.unlockAt);
-      } else {
-        setKeyDisplay(null);
-        stopCountdown();
-      }
-    } catch (e) {
-      setKeyDisplay(null);
-    }
-  }
-
-  function startCountdownUI(unlockAt) {
-    countdownEl.style.display = "flex";
-    btn.disabled = true;
-    btnText.textContent = "Locked";
-
-    if (timerInterval) clearInterval(timerInterval);
-
-    function tick() {
-      const remain = unlockAt - Date.now();
-      if (remain <= 0) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-        countdownEl.style.display = "none";
-        btn.disabled = false;
-        btnText.textContent = "Get key";
-        setKeyDisplay(null);
-        return;
-      }
-      timerEl.textContent = CD.formatTime(remain);
-    }
-    tick();
-    timerInterval = setInterval(tick, 1000);
-  }
-
-  function stopCountdown() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = null;
-    countdownEl.style.display = "none";
-    btn.disabled = false;
-    btnText.textContent = "Get key";
   }
 
   document.querySelectorAll(".method-btn").forEach(function (b) {
@@ -158,7 +155,6 @@
         x.classList.remove("active");
       });
       b.classList.add("active");
-      selectedType = b.dataset.type;
     });
   });
 
@@ -168,7 +164,7 @@
 
   logoutBtn.addEventListener("click", function () {
     Auth.logout();
-    stopCountdown();
+    stopTimer();
     showLoggedOut();
   });
 
@@ -177,8 +173,8 @@
     try {
       await navigator.clipboard.writeText(currentKey);
       copyBtn.classList.add("copied");
-      const span = copyBtn.querySelector("span");
-      const original = span.textContent;
+      var span = copyBtn.querySelector("span");
+      var original = span.textContent;
       span.textContent = "Copied!";
       setTimeout(function () {
         copyBtn.classList.remove("copied");
@@ -193,31 +189,26 @@
       return;
     }
 
-    const user = Auth.getUser();
-    const hwid = CD.getHWID();
+    var session = Auth.getSession();
+    var hwid = HWID.get();
 
     btn.disabled = true;
     btnText.textContent = "Requesting...";
     setLoading(true);
 
     try {
-      const res = await fetch("/api/key/issue", {
+      var res = await fetch("/api/key/issue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          discordId: user.id,
-          type: selectedType,
-          hwid: hwid
-        })
+        body: JSON.stringify({ session, hwid, type: "1day" })
       });
 
-      const data = await res.json();
-
+      var data = await res.json();
       setLoading(false);
 
       if (!res.ok) {
         if (res.status === 429 && data.unlockAt) {
-          startCountdownUI(data.unlockAt);
+          runTimer(data.unlockAt);
           return;
         }
         alert(data.error || "Failed to issue key");
@@ -226,8 +217,8 @@
         return;
       }
 
-      setKeyDisplay(data.key, data);
-      startCountdownUI(data.cooldownUntil);
+      paintKey(data.key, data);
+      runTimer(data.cooldownUntil);
     } catch (e) {
       setLoading(false);
       alert("Network error");
