@@ -26,21 +26,12 @@
     },
 
     logout: function () {
-      var user = this.getUser();
-
-      if (user && user.id) {
-        try {
-          fetch("/api/auth/logout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ discordId: user.id }),
-            keepalive: true
-          });
-        } catch (e) {}
-      }
-
+      localStorage.removeItem(C.KEY_SESSION);
       localStorage.removeItem(C.KEY_DISCORD);
-      localStorage.removeItem(C.KEY_ACCESS_TOKEN);
+    },
+
+    getSession: function () {
+      return localStorage.getItem(C.KEY_SESSION) || "";
     },
 
     getUser: function () {
@@ -55,7 +46,7 @@
     },
 
     isLoggedIn: function () {
-      return !!this.getUser();
+      return !!this.getUser() && !!this.getSession();
     },
 
     exchangeCode: async function (code) {
@@ -73,28 +64,17 @@
       if (!res.ok) {
         throw new Error(data.error || "Exchange failed: " + res.status);
       }
-      if (!data.user || !data.user.id) {
-        throw new Error("Invalid user data from server");
+
+      if (!data.session || !data.user || !data.user.id) {
+        throw new Error("Invalid response from server");
       }
 
-      return data.user;
+      return data;
     },
 
-    saveUser: function (user) {
-      localStorage.setItem(C.KEY_DISCORD, JSON.stringify(user));
-    },
-
-    fetchHistory: async function () {
-      var user = this.getUser();
-      if (!user) return [];
-
-      try {
-        var res = await fetch("/api/auth/history?discordId=" + encodeURIComponent(user.id));
-        var data = await res.json();
-        return data.items || [];
-      } catch (e) {
-        return [];
-      }
+    saveSession: function (data) {
+      localStorage.setItem(C.KEY_SESSION, data.session);
+      localStorage.setItem(C.KEY_DISCORD, JSON.stringify(data.user));
     }
   };
 
