@@ -106,13 +106,15 @@ module.exports = async function handler(req, res) {
       type,
       discordId: claim.uid,
       username: user.username,
-      hwidHash,
+      hwidHash: null,
       issuedAt: now,
       expireAt,
       cooldownUntil,
       issuedIp: ip,
+      issuedFromHwid: hwidHash,
       revoked: false,
-      used: false
+      used: false,
+      boundAt: null
     });
 
     await users.updateOne(
