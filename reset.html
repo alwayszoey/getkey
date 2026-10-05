@@ -69,52 +69,54 @@
   <p class="footer">© 2026 Getkey · Secured by End-to-End Encryption</p>
 </div>
 
-<script>
+<<script>
 (function () {
-  const Auth = window.GetkeyAuth;
-  const CD = window.GetkeyCooldown;
+  var Auth = window.GetkeyAuth;
+  var HWID = window.GetkeyHWID;
 
-  const currentHwidEl = document.getElementById("currentHwid");
-  const resetBtn = document.getElementById("resetBtn");
-  const resetBtnText = document.getElementById("resetBtnText");
+  var hwidEl = document.getElementById("currentHwid");
+  var btn = document.getElementById("resetBtn");
+  var btnText = document.getElementById("resetBtnText");
 
   if (!Auth.isLoggedIn()) {
     window.location.href = "/";
     return;
   }
 
-  const user = Auth.getUser();
-  currentHwidEl.textContent = CD.getHWID();
+  hwidEl.textContent = HWID.get();
 
-  resetBtn.addEventListener("click", async function () {
+  btn.addEventListener("click", async function () {
     if (!confirm("Reset HWID? Your current key will be revoked.")) return;
 
-    resetBtn.disabled = true;
-    resetBtnText.textContent = "Resetting...";
+    btn.disabled = true;
+    btnText.textContent = "Resetting...";
 
-    const oldHwid = CD.getHWID();
-    const newHwid = CD.resetHWID();
+    var session = Auth.getSession();
+    var newHwid = HWID.rotate();
 
     try {
-      await fetch("/api/key/reset-hwid", {
+      var res = await fetch("/api/key/reset-hwid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          discordId: user.id,
-          oldHwid: oldHwid,
-          newHwid: newHwid
-        })
+        body: JSON.stringify({ session: session, newHwid: newHwid })
       });
 
-      currentHwidEl.textContent = newHwid;
-      resetBtnText.textContent = "Done";
-      setTimeout(function () {
-        window.location.href = "/";
-      }, 1200);
+      var data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Reset failed");
+        btn.disabled = false;
+        btnText.textContent = "Reset HWID";
+        return;
+      }
+
+      hwidEl.textContent = newHwid;
+      btnText.textContent = "Done";
+      setTimeout(function () { window.location.href = "/"; }, 1000);
     } catch (e) {
       alert("Network error");
-      resetBtn.disabled = false;
-      resetBtnText.textContent = "Reset HWID";
+      btn.disabled = false;
+      btnText.textContent = "Reset HWID";
     }
   });
 })();
