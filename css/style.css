@@ -375,6 +375,151 @@ body::after {
   margin-bottom: 3px;
 }
 
+/* ===== Key Card ===== */
+.key-card {
+  background: linear-gradient(180deg, #1c1c1f 0%, #131316 100%);
+  border: 1px solid var(--zinc-800);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.key-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(99,102,241,0.08), transparent 50%);
+  pointer-events: none;
+}
+
+.key-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  position: relative;
+}
+.key-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--zinc-500);
+  text-transform: uppercase;
+}
+.key-card-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(113,113,122,0.15);
+  border: 1px solid rgba(113,113,122,0.3);
+  color: var(--zinc-400);
+  text-transform: uppercase;
+}
+.key-card-status.ready {
+  background: rgba(16,185,129,0.1);
+  border-color: rgba(16,185,129,0.3);
+  color: #6ee7b7;
+}
+.key-card-status.locked {
+  background: rgba(251,113,133,0.1);
+  border-color: rgba(251,113,133,0.3);
+  color: #fda4af;
+}
+
+.key-card-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(9,9,11,0.6);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.key-display {
+  flex: 1;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.key-placeholder {
+  color: var(--zinc-600);
+  font-weight: 500;
+}
+.key-display.issued .key-text {
+  background: linear-gradient(90deg, #a5b4fc, #c4b5fd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.key-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--indigo-300);
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.key-copy:hover:not(:disabled) {
+  background: rgba(99,102,241,0.2);
+  border-color: rgba(99,102,241,0.6);
+}
+.key-copy:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.key-copy.copied {
+  background: rgba(16,185,129,0.15);
+  border-color: rgba(16,185,129,0.4);
+  color: #6ee7b7;
+}
+
+.key-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--zinc-800);
+  position: relative;
+}
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.meta-label {
+  color: var(--zinc-500);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.meta-value {
+  color: var(--zinc-200);
+  font-weight: 600;
+}
+.meta-value.mono {
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  color: var(--indigo-300);
+}
+
 /* ===== Footer ===== */
 .footer {
   text-align: center;
