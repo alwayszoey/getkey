@@ -1,3 +1,4 @@
+/* ===== XenonHub Style Theme ===== */
 :root {
   --charcoal: #08090a;
   --secondary: #6366f1;
@@ -26,36 +27,43 @@
 }
 
 html, body {
-  min-height: 100svh;
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
   color: #fafafa;
-  background: linear-gradient(180deg,
+  background: #08090a;
+  background-image: linear-gradient(180deg,
     #2a2a2e 0%,
     #1c1c1f 25%,
     #121214 55%,
     #08090a 100%);
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   overflow-x: hidden;
-  margin: 0;
-  padding: 0;
 }
 
-/* ===== wrapper ===== */
-.wrapper {
-  min-height: 100svh;
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
-  position: relative;
-  z-index: 1;
 }
 
-/* ===== การ์ด ===== */
+.wrapper {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
 .card {
   width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
   background: rgba(24, 24, 27, 0.85);
   border: 1px solid var(--zinc-800);
   border-radius: 16px;
@@ -149,7 +157,7 @@ html, body {
 /* ===== Login box ===== */
 .login-box {
   text-align: center;
-  padding: 24px 8px 8px;
+  padding: 8px 0 0;
 }
 .login-header {
   display: flex;
@@ -191,67 +199,61 @@ html, body {
   font-size: 15px;
   flex-shrink: 0;
 }
-.user-info { flex: 1; min-width: 0(;99 }
-.user-name, {
+.user-info { flex: 1; min-width: 0; }
+.user-name {
   font-size: 14px;
   font-weight: 600;
   color: #fff;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow102: ellipsis;
+  text-overflow: ellipsis;
 }
-,.user-tag { font-size: 11px; color: var(--241,zinc0-500); }
-.btn-log.out {
-  width: 325px;
-  height: 32);
-px;
+.user-tag { font-size: 11px; color: var(--zinc-500); }
+.btn-logout {
+  width: 32px;
+  height: 32px;
   display: flex;
-   align-items: center;
-  justify background-content: center;
-  background:: transparent;
-  border: 1 #px solid var(--zinc-2700);
-  border-radius: f8px;
-  color:2 var(--zincf-400);
-  cursor:33 pointer;
-  transition: all;
-}
- 0.2s ease;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--zinc-700);
+  border-radius: 8px;
+  color: var(--zinc-400);
+  cursor: pointer;
+  transition: all 0.2s ease;
   flex-shrink: 0;
 }
 .btn-logout:hover {
-.method  background: rgba(220,-btn38,38,0..active1);
-  border-color: rgba {
-(220,38,38, 0.5);
-  color background: #f87171;
-:}
+  background: rgba(220,38,38,0.1);
+  border-color: rgba(220,38,38,0.5);
+  color: #f87171;
+}
 
-/* ===== Input ===== rgba */
+/* ===== Input ===== */
 .input {
   width: 100%;
   padding: 12px 14px;
   font-size: 14px;
- (99, color:102 #fafafa;
- , background: var(--zinc-241800);
-  border: 1,px solid var(--zinc-0700);
-  border-radius: .10px;
+  color: #fafafa;
+  background: var(--zinc-800);
+  border: 1px solid var(--zinc-700);
+  border-radius: 10px;
   transition: all 0.2s ease;
   outline: none;
 }
-.input::placeholder { color: var(--zinc12);
-- 500); }
-.input: borderfocus {
-  border-color: var-color(--secondary);
-  box-shadow:: 0 0 0  var3px rgba(99,102,(--241,0.15);
-secondary}
+.input::placeholder { color: var(--zinc-500); }
+.input:focus {
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
 
-/* ===== Label /);
- Hint ===== */
+/* ===== Label / Hint ===== */
 .label {
-   display: block;
-  font box-size: 12px;
-  font-shadow-weight: 500;
-  color:: var(--zinc-400);
-   margin-bottom: 8px;
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--zinc-400);
+  margin-bottom: 8px;
   letter-spacing: 0.02em;
 }
 .hint {
@@ -261,7 +263,7 @@ secondary}
   line-height: 1.7;
 }
 
-/* ===== Method selector ===== */
+/* ===== Method selector (single) ===== */
 .method-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -294,7 +296,13 @@ secondary}
   transition: all 0.2s ease;
 }
 .method-btn:hover {
-  border-color: rgba0 0 0 1px var(--secondary), 0 0 20px -4px rgba(99,102,241,0.6);
+  border-color: rgba(99,102,241,0.5);
+  background: #2f2f33;
+}
+.method-btn.active {
+  background: rgba(99,102,241,0.12);
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 1px var(--secondary), 0 0 20px -4px rgba(99,102,241,0.6);
 }
 .method-btn.active svg { stroke: var(--indigo-300); }
 .method-btn.active span { color: #c7d2fe; }
@@ -313,7 +321,10 @@ secondary}
   font-size: 13px;
   color: var(--indigo-300);
 }
-.countdown svg { stroke: var(--indigo-400); flex-shrink: 0; }
+.countdown svg {
+  stroke: var(--indigo-400);
+  flex-shrink: 0;
+}
 .countdown strong {
   font-family: "Courier New", monospace;
   font-size: 15px;
@@ -328,8 +339,15 @@ secondary}
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  gap: 12px;
 }
-.header .brand { display: flex; align-items: center; gap: 10px; }
+.header .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
 .logo {
   width: 40px;
   height: 40px;
@@ -339,11 +357,13 @@ secondary}
   align-items: center;
   justify-content: center;
   box-shadow: 0 8px 20px -6px rgba(99,102,241,0.6);
+  flex-shrink: 0;
 }
 .brand-name {
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 .brand-name span { color: var(--indigo-400); }
 .header .tag {
@@ -351,6 +371,7 @@ secondary}
   color: var(--zinc-500);
   letter-spacing: 0.1em;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 /* ===== Info box ===== */
@@ -531,6 +552,7 @@ secondary}
   text-align: center;
   font-size: 11px;
   color: #52525b;
-  margin-top: 20px;
   letter-spacing: 0.02em;
+  padding: 0;
+  margin: 0;
 }
