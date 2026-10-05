@@ -1,9 +1,21 @@
 const { connectDB } = require("../_db");
 
-const DISCORD_TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
-const DISCORD_USER_URL = "https://discord.com/api/v10/users/@me";
+const TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
+const USER_URL = "https://discord.com/api/v10/users/@me";
+const COLORS = ["#5865f2", "#eb459e", "#57f287", "#fee75c", "#ed4245"];
 
-const AVATAR_COLORS = ["#5865f2", "#eb459e", "#57f287", "#fee75c", "#ed4245"];
+function getClientInfo(req) {
+  var h = req.headers || {};
+  return {
+    ip: (h["x-forwarded-for"] || "").split(",")[0].trim() || h["x-real-ip"] || "unknown",
+    userAgent: h["user-agent"] || "unknown",
+    referer: h["referer"] || null,
+    origin: h["origin"] || null,
+    country: h["x-vercel-ip-country"] || null,
+    city: h["x-vercel-ip-city"] || null,
+    region: h["x-vercel-ip-country-region"] || null
+  };
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -11,24 +23,24 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const body = req.body || {};
-  const code = body.code;
-  const redirectUri = body.redirect_uri;
+  var body = req.body || {};
+  var code = body.code;
+  var redirectUri = body.redirect_uri;
 
   if (!code) {
     return res.status(400).json({ error: "Missing code" });
   }
 
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const fallbackRedirect = process.env.DISCORD_REDIRECT_URI;
+  var clientId = process.env.DISCORD_CLIENT_ID;
+  var clientSecret = process.env.DISCORD_CLIENT_SECRET;
+  var fallbackRedirect = process.env.DISCORD_REDIRECT_URI;
 
   if (!clientId || !clientSecret) {
     return res.status(500).json({ error: "Discord credentials missing" });
   }
 
   try {
-    const tokenRes = await fetch(DISCORD_TOKEN_URL, {
+    var tokenRes = await fetch(TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -40,7 +52,7 @@ module.exports = async function handler(req, res) {
       })
     });
 
-    const tokenData = await tokenRes.json();
+    var tokenData = await tokenRes.json();
 
     if (!tokenRes.ok || !tokenData.access_token) {
       return res.status(400).json({
@@ -49,11 +61,11 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const userRes = await fetch(DISCORD_USER_URL, {
+    var userRes = await fetch(USER_URL, {
       headers: { Authorization: "Bearer " + tokenData.access_token }
     });
 
-    const discordUser = await userRes.json();
+    var discordUser = await userRes.json();
 
     if (!userRes.ok || !discordUser.id) {
       return res.status(400).json({
@@ -62,12 +74,17 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const avatarColor =
-      AVATAR_COLORS[parseInt(discordUser.id.slice(-1), 10) % AVATAR_COLORS.length];
+    var color = COLORS[parseInt(discordUser.id.slice(-1), 10) % COLORS.length];
+    var now = new Date();
+    var client = getClientInfo(req);
 
-    const now = new Date();
-    const db = await connectDB();
-    const users = db.collection("users");
+    var db = await connectDB();
+    var users = db.collection("users");
+    var logins = db.collection("login_logs");
+
+    var isNew = false;
+    var existing = await users.findOne({ discordId: discordUser.id });
+    if (!existing) isNew = true;
 
     await users.updateOne(
       { discordId: discordUser.id },
@@ -78,30 +95,68 @@ module.exports = async function handler(req, res) {
           globalName: discordUser.global_name || null,
           discriminator: discordUser.discriminator || "0",
           avatar: discordUser.avatar || null,
-          avatarColor: avatarColor,
-          lastLoginAt: now
+          avatarColor: color,
+          lastLoginAt: now,
+          lastIp: client.ip,
+          lastUserAgent: client.userAgent,
+          lastCountry: client.country,
+          lastCity: client.city
         },
         $setOnInsert: {
-          createdAt: now
-        }
+          createdAt: now,
+          totalLogins: 0
+        },
+        $inc: { totalLogins: 1 }
       },
       { upsert: true }
     );
 
-    const savedUser = await users.findOne({ discordId: discordUser.id });
+    await logins.insertOne({
+      discordId: discordUser.id,
+      username: discordUser.username,
+      discriminator: discordUser.discriminator || "0",
+      avatar: discordUser.avatar || null,
+      avatarColor: color,
+      ip: client.ip,
+      userAgent: client.userAgent,
+      referer: client.referer,
+      origin: client.origin,
+      country: client.country,
+      city: client.city,
+      region: client.region,
+      isNewUser: isNew,
+      provider: "discord",
+      loggedInAt: now,
+      timestamp: now.getTime()
+    });
+
+    var saved = await users.findOne({ discordId: discordUser.id });
 
     return res.status(200).json({
       user: {
-        id: savedUser.discordId,
-        username: savedUser.username,
-        discriminator: savedUser.discriminator,
-        global_name: savedUser.globalName,
-        avatar: savedUser.avatar,
-        avatarColor: savedUser.avatarColor
-      }
+        id: saved.discordId,
+        username: saved.username,
+        discriminator: saved.discriminator,
+        global_name: saved.globalName,
+        avatar: saved.avatar,
+        avatarColor: saved.avatarColor
+      },
+      isNewUser: isNew,
+      totalLogins: saved.totalLogins || 1
     });
   } catch (err) {
     console.error("[exchange]", err);
+
+    try {
+      var db2 = await connectDB();
+      await db2.collection("login_errors").insertOne({
+        error: err.message,
+        stack: err.stack ? err.stack.split("\n").slice(0, 5) : null,
+        client: getClientInfo(req),
+        occurredAt: new Date()
+      });
+    } catch (e) {}
+
     return res.status(500).json({ error: "Internal error" });
   }
 };
