@@ -2,16 +2,25 @@ const { connectDB } = require("../_db");
 const { checkRateLimit, getClientId, hashKey, hashHwid, applyRateLimitHeaders } = require("../_security");
 
 module.exports = async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ valid: false, error: "Method not allowed" });
   }
 
   const clientId = getClientId(req);
   const rate = checkRateLimit("verify", clientId);
   applyRateLimitHeaders(res, rate);
+
   if (!rate.allowed) {
-    return res.status(429).json({ valid: false, error: "Too many requests" });
+    return res.status(429).json({ valid: false, reason: "rate_limited" });
   }
 
   const body = req.body || {};
@@ -19,11 +28,11 @@ module.exports = async function handler(req, res) {
   const hwid = typeof body.hwid === "string" ? body.hwid : "";
 
   if (!key || key.length > 64) {
-    return res.status(400).json({ valid: false, error: "Invalid key format" });
+    return res.status(400).json({ valid: false, reason: "invalid_format" });
   }
 
-  if (!hwid || hwid.length < 8) {
-    return res.status(400).json({ valid: false, error: "Invalid hardware id" });
+  if (!hwid || hwid.length < 8 || hwid.length > 256) {
+    return res.status(400).json({ valid: false, reason: "invalid_hwid" });
   }
 
   try {
@@ -59,6 +68,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (err) {
     console.error("[verify]", err.message);
-    return res.status(500).json({ valid: false, error: "Internal error" });
+    return res.status(500).json({ valid: false, reason: "server_error" });
   }
 };
