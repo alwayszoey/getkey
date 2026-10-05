@@ -1,258 +1,287 @@
-(function () {
-  "use strict";
+const Guard = (() => {
+  const state = {
+    triggered: false,
+    originalTitle: document.title,
+    ip: null,
+    ipLoaded: false,
+  };
 
-  var TRIGGERED = false;
-
-  var ROAST_LINES = [
-    "%c หยุดเลยครับพี่",
-    "%c แจกฟรีขนาดนี้ยังจะหา bypass อีกหรอ 555",
-    "%c เขียนด่าในโค้ดให้แล้วนะ อ่านเอา",
-    "%c ขยันแบบนี้ไปทำงานหาเงินซื้อเองก็ได้แล้ว",
-    "%c ดาวน์โหลดเกมเถื่อนยังง่ายกว่าเลยมึง",
-    "%c Ctrl+Shift+I ปิดไปเถอะครับ อยู่นานเดี๋ยว Server หนัก",
-    "%c พี่ครับ พี่ทำแบบนี้พี่ไม่ละอายใจหรอ",
-    "%c อุตส่าห์เขียนโค้ดให้ฟรี ยังจะแกะอีก",
-    "%c เห็นแล้วเหนื่อยแทนแอดมิน",
-    "%c หา bypass ไปก็ไม่มีอะไรให้ขโมยหรอก คีย์ฟรีอยู่แล้ว",
-    "%c โค้ด CSS สวย ๆ ก็ดูดไปเถอะ ยังไงก็ฟรี",
-    "%c เก่งจังเลยครับ ขอถ่ายรูปเก็บไว้หน่อยนะ",
-    "%c เปิดไปก็ได้ครับ แต่ไม่มีอะไรซ่อนอยู่จริง ๆ",
-    "%c พี่ครับ ผมก็คนนะครับ",
-    "%c อ๋อ เปิด F12 เก่งจัง อยากปรบมือให้"
+  const ALLOWED_KEYS = [
+    "getkey_cooldown_until",
+    "getkey_hwid",
+    "getkey_key",
+    "getkey_discord_user",
+    "getkey_oauth_state",
+    "getkey_access_token",
   ];
 
-  var BAN_TITLE = "🚫 GET OUT";
-  var originalTitle = document.title;
+  const ROASTS = [
+    "แจกฟรีขนาดนี้ยังจะหา bypass อีกหรอ 555",
+    "ขยันแบบนี้ไปทำงานหาเงินซื้อเองก็ได้แล้ว",
+    "อุตส่าห์เขียนโค้ดให้ฟรี ยังจะแกะอีก",
+    "หา bypass ไปก็ไม่มีอะไรให้ขโมยหรอก คีย์ฟรีอยู่แล้ว",
+    "พี่ครับ ผมก็คนนะครับ",
+    "เก่งจังเลยครับ ขอถ่ายรูปเก็บไว้หน่อยนะ",
+    "เปิด DevTools เก่งขนาดนี้ ไปสมัครงานเป็น dev ได้เลย",
+    "โค้ด CSS สวย ๆ ก็ดูดไปเถอะ ยังไงก็ฟรี",
+  ];
 
-  function showRoast() {
-    var style1 = "font-size:20px;font-weight:900;color:#f87171;background:#1a0000;padding:6px 14px;border-radius:6px;text-shadow:0 0 8px #f87171;";
-    var style2 = "font-size:13px;font-weight:600;color:#fca5a5;background:#1a0000;padding:4px 10px;border-radius:4px;";
-    var style3 = "font-size:11px;color:#a1a1aa;font-style:italic;padding:2px 8px;";
+  const CAT_SVG = `
+    <svg class="guard-cat" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg"
+         fill="none" stroke="#f87171" stroke-width="3"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 60 40 L 55 15 L 78 32 Q 100 25 122 32 L 145 15 L 140 40
+               Q 155 60 155 85 Q 155 130 100 130 Q 45 130 45 85 Q 45 60 60 40 Z"
+            fill="#1a0000"/>
+      <circle cx="78" cy="75" r="6" fill="#f87171"/>
+      <circle cx="122" cy="75" r="6" fill="#f87171"/>
+      <path d="M 100 88 L 95 95 L 105 95 Z" fill="#f87171"/>
+      <path d="M 92 108 Q 100 102 108 108"/>
+      <line x1="30" y1="85" x2="55" y2="90"/>
+      <line x1="30" y1="95" x2="55" y2="97"/>
+      <line x1="170" y1="85" x2="145" y2="90"/>
+      <line x1="170" y1="95" x2="145" y2="97"/>
+    </svg>
+  `;
 
-    var roasts = [
-      "หยุดเลยครับพี่",
-      "แจกฟรีขนาดนี้ยังจะหา bypass อีกหรอ 555",
-      "ขยันแบบนี้ไปทำงานหาเงินซื้อเองก็ได้แล้ว",
-      "อุตส่าห์เขียนโค้ดให้ฟรี ยังจะแกะอีก",
-      "หา bypass ไปก็ไม่มีอะไรให้ขโมยหรอก คีย์ฟรีอยู่แล้ว",
-      "พี่ครับ ผมก็คนนะครับ",
-      "เก่งจังเลยครับ ขอถ่ายรูปเก็บไว้หน่อยนะ"
-    ];
-
-    console.clear();
-    console.log("%c 🔒 SECURITY ALERT", style1);
-    console.log("%c โค้ดนี้เขียนด่าไว้ตรงนี้เลย อ่านได้เลยครับ :)", style2);
-
-    for (var i = 0; i < roasts.length; i++) {
-      console.log("%c" + roasts[i], style3);
+  const CSS = `
+    @keyframes guardFadeIn { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes guardPulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.04) } }
+    #__guard_overlay {
+      position: fixed; inset: 0; z-index: 999999;
+      background: #08090a;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; overflow-y: auto;
+      font-family: 'IBM Plex Sans Thai', system-ui, sans-serif;
+      text-align: center; color: #fafafa;
+      animation: guardFadeIn .25s ease;
     }
+    .guard-box { max-width: 440px; padding: 16px 0; }
+    .guard-cat {
+      width: 120px; height: 96px; margin: 0 auto 20px; display: block;
+      animation: guardPulse 2s ease infinite;
+      filter: drop-shadow(0 0 20px rgba(248,113,113,.4));
+    }
+    .guard-title {
+      font-size: 22px; font-weight: 800; color: #f87171;
+      margin-bottom: 12px; letter-spacing: -.02em;
+    }
+    .guard-sub {
+      font-size: 14px; color: #a1a1aa;
+      line-height: 1.7; margin-bottom: 20px;
+    }
+    .guard-ip-box {
+      background: #1a0a0a;
+      border: 1px solid rgba(248,113,113,.35);
+      border-radius: 10px; padding: 14px; margin-bottom: 20px;
+    }
+    .guard-ip-label {
+      font-size: 10px; color: #f87171; letter-spacing: .15em;
+      font-weight: 700; text-transform: uppercase; margin-bottom: 4px;
+    }
+    .guard-ip-value {
+      font-family: 'Courier New', monospace;
+      font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px;
+    }
+    .guard-ip-warn { font-size: 11px; color: #fca5a5; line-height: 1.5; }
+    .guard-hint {
+      font-size: 11px; color: #52525b;
+      padding: 8px 14px; background: #18181b;
+      border: 1px solid #27272a; border-radius: 8px;
+      display: inline-block; font-family: monospace;
+    }
+  `;
 
-    console.log("%c ----------------------------------", style3);
-    console.log("%c คีย์ฟรี 100% ไม่มีอะไรต้อง bypass", style2);
-    console.log("%c ปิด DevTools แล้วกลับไปกดปุ่ม Get key เถอะครับ", style3);
+  function randRoast() {
+    return ROASTS[Math.floor(Math.random() * ROASTS.length)];
   }
 
-  function showOverlay() {
+  function fetchIp() {
+    return new Promise((resolve) => {
+      if (state.ipLoaded) return resolve(state.ip);
+      fetch("https://api.ipify.org?format=json")
+        .then((r) => r.json())
+        .then((d) => {
+          state.ip = d.ip || "unknown";
+          state.ipLoaded = true;
+          resolve(state.ip);
+        })
+        .catch(() => {
+          state.ip = "unknown";
+          state.ipLoaded = true;
+          resolve(state.ip);
+        });
+    });
+  }
+
+  function mountStyle() {
+    if (document.getElementById("__guard_style")) return;
+    const s = document.createElement("style");
+    s.id = "__guard_style";
+    s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+
+  async function showOverlay() {
     if (document.getElementById("__guard_overlay")) return;
+    mountStyle();
 
-    var overlay = document.createElement("div");
+    const ip = await fetchIp();
+
+    const overlay = document.createElement("div");
     overlay.id = "__guard_overlay";
-    overlay.innerHTML =
-      '<div class="guard-box">' +
-      '  <div class="guard-emoji">🚫</div>' +
-      '  <div class="guard-title">ปิด DevTools เถอะครับพี่</div>' +
-      '  <div class="guard-sub">' +
-      '    แจกฟรีขนาดนี้แล้ว ยังจะหา bypass อีกหรอ 555<br>' +
-      '    ปิด F12 แล้วกดโหลดหน้าใหม่นะ' +
-      '  </div>' +
-      '  <div class="guard-hint">F5 / ปิด tab แล้วเข้าใหม่</div>' +
-      '</div>';
-
-    overlay.style.cssText = [
-      "position:fixed",
-      "inset:0",
-      "z-index:999999",
-      "background:#08090a",
-      "display:flex",
-      "align-items:center",
-      "justify-content:center",
-      "padding:24px",
-      "font-family:system-ui,-apple-system,sans-serif",
-      "text-align:center",
-      "color:#fafafa",
-      "animation:guardFadeIn .25s ease"
-    ].join(";");
-
-    var style = document.createElement("style");
-    style.textContent =
-      "@keyframes guardFadeIn{from{opacity:0}to{opacity:1}}" +
-      ".guard-box{max-width:420px}" +
-      ".guard-emoji{font-size:56px;margin-bottom:20px;animation:guardPulse 1s ease infinite}" +
-      "@keyframes guardPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}" +
-      ".guard-title{font-size:22px;font-weight:800;color:#f87171;margin-bottom:12px;letter-spacing:-0.02em}" +
-      ".guard-sub{font-size:14px;color:#a1a1aa;line-height:1.7;margin-bottom:20px}" +
-      ".guard-hint{font-size:11px;color:#52525b;padding:8px 14px;background:#18181b;border:1px solid #27272a;border-radius:8px;display:inline-block;font-family:monospace}";
-
-    document.head.appendChild(style);
+    overlay.innerHTML = `
+      <div class="guard-box">
+        ${CAT_SVG}
+        <div class="guard-title">ปิด DevTools เถอะครับพี่</div>
+        <div class="guard-sub">${randRoast()}</div>
+        <div class="guard-ip-box">
+          <div class="guard-ip-label">IP ของคุณ</div>
+          <div class="guard-ip-value">${ip}</div>
+          <div class="guard-ip-warn">IP นี้ถูกบันทึกไว้ในฐานข้อมูลแล้ว · อย่าทำอีก</div>
+        </div>
+        <div class="guard-hint">F5 / ปิด tab แล้วเข้าใหม่</div>
+      </div>
+    `;
     document.body.appendChild(overlay);
-
-    document.title = BAN_TITLE;
-
-    try {
-      document.body.style.overflow = "hidden";
-    } catch (e) {}
+    document.title = "SECURITY ALERT";
+    document.body.style.overflow = "hidden";
   }
 
-  function nuke() {
-    if (TRIGGERED) return;
-    TRIGGERED = true;
+  function hideOverlay() {
+    const el = document.getElementById("__guard_overlay");
+    if (el) el.remove();
+    document.title = state.originalTitle;
+    document.body.style.overflow = "";
+  }
 
-    showRoast();
-    showOverlay();
+  function trigger() {
+    if (state.triggered) return;
+    state.triggered = true;
 
     try {
       localStorage.clear();
       sessionStorage.clear();
-    } catch (e) {}
+    } catch (_) {}
+
+    showOverlay();
   }
 
-  function reset() {
-    if (!TRIGGERED) return;
-    var ov = document.getElementById("__guard_overlay");
-    if (ov) ov.remove();
-    document.title = originalTitle;
-    TRIGGERED = false;
-    try {
-      document.body.style.overflow = "";
-    } catch (e) {}
+  function clear() {
+    if (!state.triggered) return;
+    state.triggered = false;
+    hideOverlay();
   }
 
-  document.addEventListener("keydown", function (e) {
-    var k = (e.key || "").toUpperCase();
-    if (e.key === "F12" || e.keyCode === 123) {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-    if (e.ctrlKey && e.shiftKey && ["I","J","C"].indexOf(k) !== -1) {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-    if (e.ctrlKey && k === "U") {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-    if (e.ctrlKey && k === "S") {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-    if (e.metaKey && e.altKey && ["I","J","C"].indexOf(k) !== -1) {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-    if (e.metaKey && k === "U") {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-    if (e.metaKey && k === "S") {
-      e.preventDefault(); e.stopPropagation(); return false;
-    }
-  }, true);
-
-  document.addEventListener("contextmenu", function (e) {
-    e.preventDefault();
-    return false;
-  }, true);
-
-  document.addEventListener("selectstart", function (e) {
-    e.preventDefault();
-  }, true);
-  document.addEventListener("dragstart", function (e) {
-    e.preventDefault();
-  }, true);
-
-  function checkSize() {
-    var w = window.outerWidth - window.innerWidth > 160;
-    var h = window.outerHeight - window.innerHeight > 160;
-    if (w || h) nuke();
-    else reset();
+  // --- key blocks ---
+  function blockKeys() {
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        const k = (e.key || "").toUpperCase();
+        if (e.key === "F12" || e.keyCode === 123) return e.preventDefault();
+        if (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(k))
+          return e.preventDefault();
+        if (e.ctrlKey && (k === "U" || k === "S")) return e.preventDefault();
+        if (e.metaKey && e.altKey && ["I", "J", "C"].includes(k))
+          return e.preventDefault();
+        if (e.metaKey && (k === "U" || k === "S")) return e.preventDefault();
+      },
+      true
+    );
   }
-  setInterval(checkSize, 600);
-  window.addEventListener("resize", checkSize);
 
-  setInterval(function () {
-    var start = performance.now();
-    debugger;
-    var end = performance.now();
-    if (end - start > 100) nuke();
-  }, 1500);
+  function blockMouse() {
+    ["contextmenu", "selectstart", "dragstart"].forEach((evt) => {
+      document.addEventListener(evt, (e) => e.preventDefault(), true);
+    });
+  }
 
-  var probe = /./;
-  probe.toString = function () {
-    nuke();
-    return "";
-  };
-  setInterval(function () {
-    try { console.log(probe); } catch (e) {}
-  }, 1500);
+  // --- size check (debounced) ---
+  let sizeTimer = null;
+  function onResize() {
+    clearTimeout(sizeTimer);
+    sizeTimer = setTimeout(() => {
+      const w = window.outerWidth - window.innerWidth;
+      const h = window.outerHeight - window.innerHeight;
+      if (w > 200 || h > 200) trigger();
+      else clear();
+    }, 400);
+  }
 
-  var probe2 = new Image();
-  Object.defineProperty(probe2, "id", {
-    get: function () {
-      nuke();
+  // --- debugger timing (desktop only) ---
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  function watchDebugger() {
+    if (isMobile) return;
+    setInterval(() => {
+      const t0 = performance.now();
+      // eslint-disable-next-line no-debugger
+      debugger;
+      if (performance.now() - t0 > 200) trigger();
+    }, 3000);
+  }
+
+  // --- console probes ---
+  function watchConsoleProbes() {
+    const probe = /./;
+    probe.toString = () => {
+      trigger();
       return "";
-    }
-  });
-  setInterval(function () {
-    try { console.log(probe2); } catch (e) {}
-  }, 1800);
+    };
+    setInterval(() => {
+      try {
+        console.log(probe);
+      } catch (_) {}
+    }, 3000);
 
-  if (window.top !== window.self) {
+    const img = new Image();
+    Object.defineProperty(img, "id", {
+      get() {
+        trigger();
+        return "";
+      },
+    });
+    setInterval(() => {
+      try {
+        console.log(img);
+      } catch (_) {}
+    }, 3500);
+  }
+
+  // --- iframe guard ---
+  function blockIframe() {
+    if (window.top === window.self) return;
     try {
       window.top.location = window.self.location;
-    } catch (e) {
+    } catch (_) {
       document.body.innerHTML =
         '<div style="display:flex;align-items:center;justify-content:center;' +
-        'min-height:100vh;background:#08090a;color:#fb7185;' +
+        "min-height:100vh;background:#08090a;color:#fb7185;" +
         'font-family:system-ui;text-align:center;padding:20px;">' +
-        '<div><h1 style="font-size:20px;">Access Denied</h1></div></div>';
+        "<h1>Access Denied</h1></div>";
     }
   }
 
-  try {
-    var noop = function () {};
-    Object.defineProperty(window, "console", {
-      get: function () {
-        return {
-          log: noop, warn: noop, error: noop,
-          info: noop, debug: noop, table: noop,
-          clear: noop, dir: noop, trace: noop
-        };
-      },
-      configurable: false
-    });
-  } catch (e) {}
-
-  try {
-    var allowed = [
-      "getkey_cooldown_until",
-      "getkey_hwid",
-      "getkey_key",
-      "getkey_discord_user",
-      "getkey_oauth_state",
-      "getkey_access_token"
-    ];
-    var originalSet = Storage.prototype.setItem;
+  // --- storage lock ---
+  function lockStorage() {
+    const originalSet = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
-      if (allowed.indexOf(key) === -1) return;
+      if (!ALLOWED_KEYS.includes(key)) return;
       originalSet.call(this, key, value);
     };
-  } catch (e) {}
+  }
 
-  try {
-    Object.defineProperty(window, "GetkeyAuth", {
-      configurable: false,
-      writable: false
-    });
-  } catch (e) {}
+  function init() {
+    blockKeys();
+    blockMouse();
+    blockIframe();
+    lockStorage();
+    watchConsoleProbes();
+    watchDebugger();
+    window.addEventListener("resize", onResize);
+  }
 
-  try {
-    var s = "font-size:16px;font-weight:800;color:#f87171;";
-    var t = "font-size:12px;color:#a1a1aa;";
-    setTimeout(function () {
-    }, 0);
-  } catch (e) {}
+  return { init, trigger, clear };
 })();
+
+Guard.init();
