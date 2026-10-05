@@ -36,7 +36,9 @@
       try {
         const u = JSON.parse(raw);
         return u && u.id ? u : null;
-      } catch (e) { return null; }
+      } catch (e) {
+        return null;
+      }
     },
 
     isLoggedIn() {
@@ -44,30 +46,28 @@
     },
 
     async exchangeCode(code) {
-      try {
-        const res = await fetch("/api/discord/exchange", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code: code,
-            redirect_uri: C.DISCORD_REDIRECT_URI
-          })
-        });
-        if (!res.ok) throw new Error("Exchange failed");
-        const data = await res.json();
-        if (!data.user) throw new Error("No user");
-        return data.user;
-      } catch (e) {
+      const res = await fetch("/api/auth/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: code,
+          redirect_uri: C.DISCORD_REDIRECT_URI
+        })
+      });
 
-        console.warn("[auth] backend ไม่พร้อม ใช้ fallback user");
-        return {
-          id: "fallback_" + Date.now().toString(36),
-          username: "Guest",
-          discriminator: "0000",
-          avatarColor: "#5865f2",
-          fallback: true
-        };
+      const data = await res.json().catch(function () {
+        return {};
+      });
+
+      if (!res.ok) {
+        throw new Error(data.error || "Exchange failed: " + res.status);
       }
+
+      if (!data.user || !data.user.id) {
+        throw new Error("Invalid user data from server");
+      }
+
+      return data.user;
     },
 
     saveUser(user) {
