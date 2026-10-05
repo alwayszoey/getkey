@@ -61,10 +61,30 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ valid: false, reason: "hwid_mismatch" });
     }
 
+    let bound = false;
+
+    if (!record.hwidHash) {
+      const ip = ((req.headers["x-forwarded-for"] || "").split(",")[0] || "").trim() || "unknown";
+
+      await keys.updateOne(
+        { _id: record._id },
+        {
+          $set: {
+            hwidHash: hwidHash,
+            boundAt: now,
+            boundIp: ip
+          }
+        }
+      );
+
+      bound = true;
+    }
+
     return res.status(200).json({
       valid: true,
       expiresAt: record.expireAt,
-      type: record.type
+      type: record.type,
+      bound
     });
   } catch (err) {
     console.error("[verify]", err.message);
