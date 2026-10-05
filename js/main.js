@@ -10,6 +10,8 @@
   const timerEl = document.getElementById("timer");
   const btn = document.getElementById("getkeyBtn");
   const btnText = document.getElementById("btnText");
+  const btnIcon = document.getElementById("btnIcon");
+  const btnSpinner = document.getElementById("btnSpinner");
   const discordBtn = document.getElementById("discordBtn");
   const logoutBtn = document.getElementById("logoutBtn");
   const userName = document.getElementById("userName");
@@ -26,6 +28,16 @@
   let selectedType = "1day";
   let timerInterval = null;
   let currentKey = null;
+
+  function setLoading(isLoading) {
+    if (isLoading) {
+      btnIcon.style.display = "none";
+      btnSpinner.style.display = "inline-flex";
+    } else {
+      btnIcon.style.display = "inline-flex";
+      btnSpinner.style.display = "none";
+    }
+  }
 
   function applyDiscordUser(user) {
     userName.textContent = user.username || "-";
@@ -51,7 +63,7 @@
         keyMeta.style.display = "flex";
         metaType.textContent = meta.type || "-";
         metaExpires.textContent = meta.expireAt
-          ? new Date(meta.expireAt).toLocaleString("th-TH")
+          ? new Date(meta.expireAt).toLocaleString("en-US")
           : "-";
         metaHwid.textContent = meta.hwid || "-";
       }
@@ -86,6 +98,9 @@
   }
 
   async function checkRemoteStatus(discordId) {
+    keyStatus.textContent = "Loading";
+    keyStatus.className = "key-card-status";
+
     try {
       const res = await fetch(
         "/api/key/status?discordId=" + encodeURIComponent(discordId)
@@ -183,6 +198,7 @@
 
     btn.disabled = true;
     btnText.textContent = "Requesting...";
+    setLoading(true);
 
     try {
       const res = await fetch("/api/key/issue", {
@@ -196,6 +212,8 @@
       });
 
       const data = await res.json();
+
+      setLoading(false);
 
       if (!res.ok) {
         if (res.status === 429 && data.unlockAt) {
@@ -211,6 +229,7 @@
       setKeyDisplay(data.key, data);
       startCountdownUI(data.cooldownUntil);
     } catch (e) {
+      setLoading(false);
       alert("Network error");
       btn.disabled = false;
       btnText.textContent = "Get key";
