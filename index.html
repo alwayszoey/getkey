@@ -46,65 +46,106 @@
     </div>
 
     <!-- Content -->
-    <div id="contentBox" style="display:none;">
+<div id="contentBox" style="display:none;">
 
-      <div class="user-bar">
-        <div class="user-avatar" id="userAvatar"></div>
-        <div class="user-info">
-          <div class="user-name" id="userName">-</div>
-          <div class="user-tag" id="userTag">-</div>
-        </div>
-        <button class="btn-logout" id="logoutBtn" title="ออกจากระบบ">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-        </button>
+  <div class="user-bar">
+    <div class="user-avatar" id="userAvatar"></div>
+    <div class="user-info">
+      <div class="user-name" id="userName">-</div>
+      <div class="user-tag" id="userTag">-</div>
+    </div>
+    <button class="btn-logout" id="logoutBtn" title="Logout">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="key-card">
+    <div class="key-card-header">
+      <span class="key-card-title">Your Key</span>
+      <span class="key-card-status" id="keyStatus">Ready</span>
+    </div>
+
+    <div class="key-card-body">
+      <div class="key-display" id="keyDisplay">
+        <span class="key-placeholder">XXXX-XXXX-XXXX-XXXX</span>
       </div>
-
-      <label class="label">เลือกประเภทคีย์</label>
-      <div class="method-grid">
-        <button type="button" class="method-btn active" data-type="1day">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-          </svg>
-          <span>1 วัน</span>
-        </button>
-        <button type="button" class="method-btn" data-type="7day">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
-          </svg>
-          <span>7 วัน</span>
-        </button>
-        <button type="button" class="method-btn" data-type="30day">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-          </svg>
-          <span>30 วัน</span>
-        </button>
-      </div>
-
-      <div class="countdown" id="countdown" style="display:none;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-        </svg>
-        <span>รับคีย์ได้อีกครั้งใน <strong id="timer">00:00:00</strong></span>
-      </div>
-
-      <button class="btn-primary" id="getkeyBtn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-        </svg>
-        <span id="btnText">Get key</span>
-      </button>
-
-      <div style="height:10px;"></div>
-
-      <a href="reset.html" class="btn-outline">
+      <button class="key-copy" id="copyBtn" disabled>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </svg>
-        <span>Reset HWID</span>
-      </a>
+        <span>Copy</span>
+      </button>
+    </div>
+
+    <div class="key-card-meta" id="keyMeta" style="display:none;">
+      <div class="meta-row">
+        <span class="meta-label">Type</span>
+        <span class="meta-value" id="metaType">-</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-label">Expires</span>
+        <span class="meta-value" id="metaExpires">-</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-label">HWID</span>
+        <span class="meta-value mono" id="metaHwid">-</span>
+      </div>
+    </div>
+  </div>
+
+  <label class="label">Select duration</label>
+  <div class="method-grid">
+    <button type="button" class="method-btn active" data-type="1day">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+      </svg>
+      <span>1 day</span>
+    </button>
+    <button type="button" class="method-btn" data-type="7day">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      <span>7 days</span>
+    </button>
+    <button type="button" class="method-btn" data-type="30day">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      </svg>
+      <span>30 days</span>
+    </button>
+  </div>
+
+  <div class="countdown" id="countdown" style="display:none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+    </svg>
+    <span>Next key in <strong id="timer">00:00:00</strong></span>
+  </div>
+
+  <button class="btn-primary" id="getkeyBtn">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+    </svg>
+    <span id="btnText">Get key</span>
+  </button>
+
+  <div style="height:10px;"></div>
+
+  <a href="/reset" class="btn-outline">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+      <path d="M3 3v5h5"/>
+    </svg>
+    <span>Reset HWID</span>
+  </a>
+
+</div>
 
       <p class="hint" style="margin-top:16px;">
         คีย์ฟรีจำกัด 1 ครั้งต่อ 24 ชั่วโมง · ระบบจะส่งคีย์ไปยัง Discord ของคุณ
