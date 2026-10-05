@@ -1,6 +1,7 @@
 const Guard = (() => {
   const state = {
     triggered: false,
+    triggeredAt: 0,
     originalTitle: document.title,
     ip: null,
     ipLoaded: false,
@@ -92,6 +93,8 @@ const Guard = (() => {
     }
   `;
 
+  const HOLD_MS = 5000;
+
   function randRoast() {
     return ROASTS[Math.floor(Math.random() * ROASTS.length)];
   }
@@ -158,6 +161,7 @@ const Guard = (() => {
   function trigger() {
     if (state.triggered) return;
     state.triggered = true;
+    state.triggeredAt = Date.now();
 
     try {
       localStorage.clear();
@@ -169,11 +173,12 @@ const Guard = (() => {
 
   function clear() {
     if (!state.triggered) return;
+    // กัน clear ทันทีหลัง trigger (จาก debounce สลับ)
+    if (Date.now() - state.triggeredAt < HOLD_MS) return;
     state.triggered = false;
     hideOverlay();
   }
 
-  // --- key blocks ---
   function blockKeys() {
     document.addEventListener(
       "keydown",
@@ -197,19 +202,39 @@ const Guard = (() => {
     });
   }
 
-  // --- size check (debounced) ---
+  // size check — เฉพาะตอน orientation จริง ๆ เปลี่ยน
   let sizeTimer = null;
+  let lastW = window.innerWidth;
+  let lastH = window.innerHeight;
+
   function onResize() {
     clearTimeout(sizeTimer);
     sizeTimer = setTimeout(() => {
-      const w = window.outerWidth - window.innerWidth;
-      const h = window.outerHeight - window.innerHeight;
-      if (w > 200 || h > 200) trigger();
+      const curW = window.innerWidth;
+      const curH = window.innerHeight;
+
+      // ถ้าขนาด viewport ไม่เปลี่ยนมาก ถือว่าเป็นแค่ devtools เปิด/ปิด
+      const viewportChanged =
+        Math.abs(curW - lastW) > 30 || Math.abs(curH - lastH) > 30;
+
+      const dw = window.outerWidth - window.innerWidth;
+      const dh = window.outerHeight - window.innerHeight;
+
+      if (viewportChanged) {
+        // rotate / keyboard → reset baseline, ไม่ trigger
+        lastW = curW;
+        lastH = curH;
+        clear();
+        return;
+      }
+
+      // viewport เดิม แต่ outer-inner ต่างเยอะ → devtools เปิด
+      if (dw > 250 || dh > 250) trigger();
       else clear();
-    }, 400);
+    }, 500);
   }
 
-  // --- debugger timing (desktop only) ---
+  // debugger timing — desktop only
   const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   function watchDebugger() {
     if (isMobile) return;
@@ -217,38 +242,10 @@ const Guard = (() => {
       const t0 = performance.now();
       // eslint-disable-next-line no-debugger
       debugger;
-      if (performance.now() - t0 > 200) trigger();
-    }, 3000);
+      if (performance.now() - t0 > 250) trigger();
+    }, 4000);
   }
 
-  // --- console probes ---
-  function watchConsoleProbes() {
-    const probe = /./;
-    probe.toString = () => {
-      trigger();
-      return "";
-    };
-    setInterval(() => {
-      try {
-        console.log(probe);
-      } catch (_) {}
-    }, 3000);
-
-    const img = new Image();
-    Object.defineProperty(img, "id", {
-      get() {
-        trigger();
-        return "";
-      },
-    });
-    setInterval(() => {
-      try {
-        console.log(img);
-      } catch (_) {}
-    }, 3500);
-  }
-
-  // --- iframe guard ---
   function blockIframe() {
     if (window.top === window.self) return;
     try {
@@ -262,7 +259,6 @@ const Guard = (() => {
     }
   }
 
-  // --- storage lock ---
   function lockStorage() {
     const originalSet = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
@@ -276,9 +272,13 @@ const Guard = (() => {
     blockMouse();
     blockIframe();
     lockStorage();
-    watchConsoleProbes();
     watchDebugger();
     window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", () => {
+      lastW = window.innerWidth;
+      lastH = window.innerHeight;
+      clear();
+    });
   }
 
   return { init, trigger, clear };
