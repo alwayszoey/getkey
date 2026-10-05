@@ -1,13 +1,25 @@
 const { connectDB } = require("../_db");
+const { checkRateLimit, getClientId, verify, applyRateLimitHeaders } = require("../_security");
 
 module.exports = async function handler(req, res) {
-  if (req.method !== "GET") {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { discordId } = req.query;
-  if (!discordId) {
-    return res.status(400).json({ error: "Missing discordId" });
+  const clientId = getClientId(req);
+  const rate = checkRateLimit("status", clientId);
+  applyRateLimitHeaders(res, rate);
+  if (!rate.allowed) {
+    return res.status(429).json({ error: "Too many requests" });
+  }
+
+  const body = req.body || {};
+  const session = typeof body.session === "string" ? body.session : "";
+
+  const claim = verify(session);
+  if (!claim || !claim.uid || claim.exp < Date.now()) {
+    return res.status(401).json({ error: "Invalid session" });
   }
 
   try {
@@ -16,7 +28,7 @@ module.exports = async function handler(req, res) {
     const now = Date.now();
 
     const latest = await keys.findOne(
-      { discordId },
+      { discordId: claim.uid },
       { sort: { issuedAt: -1 } }
     );
 
@@ -30,11 +42,11 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       locked,
       unlockAt: locked ? unlockAt : 0,
-      key: locked ? latest.key : null,
-      type: locked ? latest.type : null
+      type: latest.type,
+      expiresAt: latest.expireAt
     });
   } catch (err) {
-    console.error("[status] error:", err);
+    console.error("[status]", err.message);
     return res.status(500).json({ error: "Internal error" });
   }
 };
