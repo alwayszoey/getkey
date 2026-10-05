@@ -87,29 +87,26 @@ module.exports = async function handler(req, res) {
     if (!existing) isNew = true;
 
     await users.updateOne(
-      { discordId: discordUser.id },
-      {
-        $set: {
-          discordId: discordUser.id,
-          username: discordUser.username,
-          globalName: discordUser.global_name || null,
-          discriminator: discordUser.discriminator || "0",
-          avatar: discordUser.avatar || null,
-          avatarColor: color,
-          lastLoginAt: now,
-          lastIp: client.ip,
-          lastUserAgent: client.userAgent,
-          lastCountry: client.country,
-          lastCity: client.city
-        },
-        $setOnInsert: {
-          createdAt: now,
-          totalLogins: 0
-        },
-        $inc: { totalLogins: 1 }
-      },
-      { upsert: true }
-    );
+  { discordId: discordUser.id },
+  {
+    $set: {
+      discordId: discordUser.id,
+      username: discordUser.username,
+      globalName: discordUser.global_name || null,
+      discriminator: discordUser.discriminator || "0",
+      avatar: discordUser.avatar || null,
+      avatarColor: color,
+      lastLoginAt: now,
+      lastIp: ip,
+      lastUserAgent: ua
+    },
+    $setOnInsert: {
+      createdAt: now
+    },
+    $inc: { totalLogins: 1 }
+  },
+  { upsert: true }
+);
 
     await logins.insertOne({
       discordId: discordUser.id,
