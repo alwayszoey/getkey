@@ -30,6 +30,12 @@
 
   var currentKey = null;
   var timer = null;
+  var gate = {
+    step1Token: null,
+    step1Url: null,
+    step2Url: null,
+    stage: "idle"
+  };
 
   function setLoading(on) {
     btnIcon.style.display = on ? "none" : "inline-flex";
@@ -84,6 +90,7 @@
     countdownEl.style.display = "none";
     btn.disabled = false;
     btnText.textContent = "Get key";
+    setLoading(false);
   }
 
   function runTimer(unlockAt) {
@@ -121,6 +128,12 @@
         body: JSON.stringify({ session })
       });
 
+      if (res.status === 403) {
+        paintKey(null);
+        stopTimer();
+        return;
+      }
+
       var data = await res.json();
 
       if (data.locked) {
@@ -147,6 +160,143 @@
   function showLoggedOut() {
     loginBox.style.display = "block";
     contentBox.style.display = "none";
+  }
+
+  function openExternal(url) {
+    if (!url) return;
+    try {
+      var w = window.open(url, "_blank", "noopener,noreferrer");
+      if (!w) {
+        var a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch (e) {}
+  }
+
+  function startGate() {
+    var hwid = HWID.get();
+    var session = Auth.getSession();
+
+    return fetch("/api/key/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session: session,
+        hwid: hwid,
+        type: "1day"
+      })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) {
+          if (res.status === 403 && data.reason) {
+            throw new Error("Banned: " + data.reason);
+          }
+          throw new Error(data.error || "Failed to start");
+        }
+        gate.step1Token = data.step1Token;
+        gate.step1Url = data.linkvertiseStep1;
+        gate.step2Url = data.linkvertiseStep2;
+        return data;
+      });
+    });
+  }
+
+  function completeGate() {
+    var hwid = HWID.get();
+
+    return fetch("/api/key/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        step1Token: gate.step1Token,
+        hwid: hwid
+      })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) {
+          if (res.status === 403 && data.reason) {
+            throw new Error("Banned: " + data.reason);
+          }
+          throw new Error(data.error || "Failed to complete");
+        }
+        return data;
+      });
+    });
+  }
+
+  function step1Flow() {
+    if (!gate.step1Url) {
+      alert("Step 1 link is not configured");
+      stopTimer();
+      return;
+    }
+
+    var proceed = confirm(
+      "Step 1 of 2\n\n" +
+      "Open the sponsor link, wait for it to fully load, then come back.\n\n" +
+      "Click OK to open the link."
+    );
+
+    if (!proceed) {
+      stopTimer();
+      return;
+    }
+
+    openExternal(gate.step1Url);
+
+    btnText.textContent = "I finished step 1";
+
+    var onStep1Done = function () {
+      btn.removeEventListener("click", onStep1Done);
+      step2Flow();
+    };
+
+    btn.addEventListener("click", onStep1Done);
+  }
+
+  function step2Flow() {
+    if (!gate.step2Url) {
+      alert("Step 2 link is not configured");
+      stopTimer();
+      return;
+    }
+
+    btnText.textContent = "Step 2...";
+    setLoading(true);
+
+    setTimeout(function () {
+      setLoading(false);
+      var proceed = confirm(
+        "Step 2 of 2\n\n" +
+        "Open the second sponsor link, wait for it to fully load, then come back.\n\n" +
+        "Click OK to open the link."
+      );
+
+      if (!proceed) {
+        stopTimer();
+        return;
+      }
+
+      openExternal(gate.step2Url);
+      btn.disabled = true;
+      btnText.textContent = "Claiming key...";
+      setLoading(true);
+
+      setTimeout(function () {
+        completeGate().then(function (data) {
+          paintKey(data.key, data);
+          runTimer(data.cooldownUntil);
+        }).catch(function (err) {
+          alert(err.message || "Failed to claim key");
+          stopTimer();
+        });
+      }, 6000);
+    }, 700);
   }
 
   document.querySelectorAll(".method-btn").forEach(function (b) {
@@ -183,48 +333,25 @@
     } catch (e) {}
   });
 
-  btn.addEventListener("click", async function () {
+  btn.addEventListener("click", function () {
     if (!Auth.isLoggedIn()) {
       alert("Please login with Discord first");
       return;
     }
 
-    var session = Auth.getSession();
-    var hwid = HWID.get();
-
     btn.disabled = true;
-    btnText.textContent = "Requesting...";
+    btnText.textContent = "Starting gate...";
     setLoading(true);
 
-    try {
-      var res = await fetch("/api/key/issue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session, hwid, type: "1day" })
-      });
-
-      var data = await res.json();
+    startGate().then(function () {
       setLoading(false);
-
-      if (!res.ok) {
-        if (res.status === 429 && data.unlockAt) {
-          runTimer(data.unlockAt);
-          return;
-        }
-        alert(data.error || "Failed to issue key");
-        btn.disabled = false;
-        btnText.textContent = "Get key";
-        return;
-      }
-
-      paintKey(data.key, data);
-      runTimer(data.cooldownUntil);
-    } catch (e) {
+      step1Flow();
+    }).catch(function (err) {
       setLoading(false);
-      alert("Network error");
+      alert(err.message || "Network error");
       btn.disabled = false;
       btnText.textContent = "Get key";
-    }
+    });
   });
 
   if (Auth.isLoggedIn()) showLoggedIn();
