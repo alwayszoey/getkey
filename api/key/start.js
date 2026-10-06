@@ -66,6 +66,26 @@ module.exports = async function handler(req, res) {
     return res.status(404).json({ error: "User not found" });
   }
 
+  const now = Date.now();
+
+  const activeKey = await db.collection("keys").findOne({
+    discordId: claim.uid,
+    revoked: { $ne: true },
+    $or: [
+      { cooldownUntil: { $gt: now } },
+      { expireAt: { $gt: now } }
+    ]
+  });
+
+  if (activeKey) {
+    const unlockAt = Math.max(activeKey.cooldownUntil || 0, activeKey.expireAt || 0);
+    return res.status(429).json({
+      error: "Cooldown active",
+      unlockAt: unlockAt,
+      locked: true
+    });
+  }
+
   const gate = db.collection("gate_tokens");
 
   await gate.updateOne(
@@ -75,7 +95,7 @@ module.exports = async function handler(req, res) {
         discordId: claim.uid,
         hwid: hwid,
         type: type,
-        step1At: Date.now(),
+        step1At: now,
         step1Ip: ip,
         step2At: null,
         step2Ip: null,
@@ -88,8 +108,8 @@ module.exports = async function handler(req, res) {
   const step1Token = sign({
     uid: claim.uid,
     step: 1,
-    iat: Date.now(),
-    exp: Date.now() + 1000 * 60 * 10
+    iat: now,
+    exp: now + 1000 * 60 * 10
   });
 
   return res.status(200).json({
