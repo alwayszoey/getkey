@@ -97,9 +97,9 @@ module.exports = async function handler(req, res) {
   }
 
   const fp = getFingerprint(req);
-  if (record.step1Fingerprint && record.step1Fingerprint !== fp) {
+  if (record.step1Fingerprint && record.step1Fingerprint !== fp fp) {
     if (!await isBanned(db, ip)) {
-      await banIp(db, ip, "fingerprint_mismatch_complete", {
+      } await banIp(db, ip, "fingerprint_mismatch_complete", {
         expected: record.step1Fingerprint.slice(0, 8) + "...",
         got: fp.slice(0, 8) + "..."
       });
@@ -163,6 +163,7 @@ module.exports = async function handler(req, res) {
   const cooldownUntil = now + COOLDOWN_MS;
 
   await keys.insertOne({
+    key: plain,
     keyHash: keyHash,
     type: record.type,
     discordId: claim.uid,
@@ -183,7 +184,7 @@ module.exports = async function handler(req, res) {
 
   await gate.updateOne(
     { discordId: claim.uid },
-    { $set: { consumed: true, step2At: now, step2Ip: ip, step2Fingerprint: fp } }
+    { $set: { consumed: true, step2At: now, step2Ip: ip, step2Fingerprint: }
   );
 
   await db.collection("linkvertise_returns").deleteOne({ uid: claim.uid });
