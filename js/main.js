@@ -37,6 +37,9 @@
     stage: "idle"
   };
 
+  var GATE_KEY = "gk.gate.v1";
+  var GATE_TTL = 10 * 60 * 1000;
+
   function setLoading(on) {
     btnIcon.style.display = on ? "none" : "inline-flex";
     btnSpinner.style.display = on ? "inline-flex" : "none";
@@ -114,6 +117,47 @@
     timer = setInterval(tick, 1000);
   }
 
+  function saveGateState() {
+    try {
+      sessionStorage.setItem(GATE_KEY, JSON.stringify({
+        step1Token: gate.step1Token,
+        step1Url: gate.step1Url,
+        step2Url: gate.step2Url,
+        stage: gate.stage,
+        startedAt: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  function restoreGateState() {
+    try {
+      var raw = sessionStorage.getItem(GATE_KEY);
+      if (!raw) return false;
+
+      var s = JSON.parse(raw);
+      if (!s || !s.step1Token) return false;
+
+      if (Date.now() - (s.startedAt || 0) > GATE_TTL) {
+        sessionStorage.removeItem(GATE_KEY);
+        return false;
+      }
+
+      gate.step1Token = s.step1Token;
+      gate.step1Url = s.step1Url;
+      gate.step2Url = s.step2Url;
+      gate.stage = s.stage || "step1";
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function clearGateState() {
+    try {
+      sessionStorage.removeItem(GATE_KEY);
+    } catch (e) {}
+  }
+
   async function loadStatus() {
     var session = Auth.getSession();
     if (!session) return;
@@ -164,18 +208,13 @@
 
   function openExternal(url) {
     if (!url) return;
+    if (document.getElementById("gateModal")) return;
+
     try {
-      var w = window.open(url, "_blank", "noopener,noreferrer");
-      if (!w) {
-        var a = document.createElement("a");
-        a.href = url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
+      sessionStorage.setItem("gk.gate.return", "1");
     } catch (e) {}
+
+    window.location.href = url;
   }
 
   function showGateModal(opts) {
@@ -229,6 +268,7 @@
       });
 
       function close(result) {
+        overlay.style.pointerEvents = "none";
         overlay.classList.remove("show");
         setTimeout(function () {
           overlay.remove();
@@ -285,6 +325,8 @@
         gate.step1Token = data.step1Token;
         gate.step1Url = data.linkvertiseStep1;
         gate.step2Url = data.linkvertiseStep2;
+        gate.stage = "step1";
+        saveGateState();
         return data;
       });
     });
@@ -314,6 +356,10 @@
   }
 
   function step1Flow() {
+    if (btn.dataset.gateStage === "step1" || btn.dataset.gateStage === "step2") {
+      return;
+    }
+
     if (!gate.step1Url) {
       alert("Step 1 link is not configured");
       stopTimer();
@@ -324,7 +370,7 @@
       title: "Open Sponsor Link",
       step: 1,
       total: 2,
-      description: "Click continue below. A new tab will open with the sponsor page. Wait for it to fully load, then come back here.",
+      description: "Click continue below. The sponsor page will open. Wait for it to fully load, then come back here.",
       note: "Closing the sponsor page early may break the verification.",
       confirmText: "Open link"
     }).then(function (ok) {
@@ -333,8 +379,10 @@
         return;
       }
 
-      openExternal(gate.step1Url);
+      gate.stage = "step1";
+      saveGateState();
 
+      btn.dataset.gateStage = "step1";
       btnText.textContent = "I finished step 1";
 
       var onStep1Done = function () {
@@ -343,10 +391,16 @@
       };
 
       btn.addEventListener("click", onStep1Done);
+
+      openExternal(gate.step1Url);
     });
   }
 
   function step2Flow() {
+    if (btn.dataset.gateStage === "step2") {
+      return;
+    }
+
     if (!gate.step2Url) {
       alert("Step 2 link is not configured");
       stopTimer();
@@ -372,22 +426,76 @@
           return;
         }
 
-        openExternal(gate.step2Url);
+        gate.stage = "step2";
+        saveGateState();
+
+        btn.dataset.gateStage = "step2";
         btn.disabled = true;
         btnText.textContent = "Claiming key...";
         setLoading(true);
 
         setTimeout(function () {
+          openExternal(gate.step2Url);
+        }, 150);
+
+        setTimeout(function () {
           completeGate().then(function (data) {
+            clearGateState();
+            delete btn.dataset.gateStage;
             paintKey(data.key, data);
             runTimer(data.cooldownUntil);
           }).catch(function (err) {
+            clearGateState();
+            delete btn.dataset.gateStage;
             alert(err.message || "Failed to claim key");
             stopTimer();
           });
         }, 6000);
       });
     }, 700);
+  }
+
+  function resumeGate() {
+    if (!restoreGateState()) return false;
+
+    if (gate.stage === "step2") {
+      btn.dataset.gateStage = "step2";
+      btn.disabled = true;
+      btnText.textContent = "Claiming key...";
+      setLoading(true);
+
+      setTimeout(function () {
+        completeGate().then(function (data) {
+          clearGateState();
+          delete btn.dataset.gateStage;
+          paintKey(data.key, data);
+          runTimer(data.cooldownUntil);
+        }).catch(function (err) {
+          clearGateState();
+          delete btn.dataset.gateStage;
+          alert(err.message || "Failed to claim key");
+          stopTimer();
+        });
+      }, 2000);
+
+      return true;
+    }
+
+    if (gate.stage === "step1") {
+      btn.dataset.gateStage = "step1";
+      btnText.textContent = "I finished step 1";
+
+      var onStep1Done = function () {
+        btn.removeEventListener("click", onStep1Done);
+        step2Flow();
+      };
+
+      btn.addEventListener("click", onStep1Done);
+
+      return true;
+    }
+
+    return false;
   }
 
   document.querySelectorAll(".method-btn").forEach(function (b) {
@@ -405,6 +513,7 @@
 
   logoutBtn.addEventListener("click", function () {
     Auth.logout();
+    clearGateState();
     stopTimer();
     showLoggedOut();
   });
@@ -425,6 +534,10 @@
   });
 
   btn.addEventListener("click", function () {
+    if (btn.dataset.gateStage === "step1" || btn.dataset.gateStage === "step2") {
+      return;
+    }
+
     if (!Auth.isLoggedIn()) {
       alert("Please login with Discord first");
       return;
@@ -445,6 +558,10 @@
     });
   });
 
-  if (Auth.isLoggedIn()) showLoggedIn();
-  else showLoggedOut();
+  if (Auth.isLoggedIn()) {
+    showLoggedIn();
+    resumeGate();
+  } else {
+    showLoggedOut();
+  }
 })();
