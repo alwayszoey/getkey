@@ -66,6 +66,28 @@ function getClientId(req) {
   return getClientIp(req);
 }
 
+function getFingerprint(req) {
+  const ip = getClientIp(req);
+  const ua = (req.headers["user-agent"] || "").slice(0, 200);
+  const lang = (req.headers["accept-language"] || "").slice(0, 100);
+  const enc = (req.headers["accept-encoding"] || "").slice(0, 60);
+  const raw = ip + "|" + ua + "|" + lang + "|" + enc;
+  return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 32);
+}
+
+function isLinkvertiseReferer(req) {
+  const ref = (req.headers["referer"] || req.headers["referrer"] || "").toLowerCase();
+  if (!ref) return false;
+  return (
+    ref.indexOf("linkvertise.com") !== -1 ||
+    ref.indexOf("link-hub.net") !== -1 ||
+    ref.indexOf("link-to.net") !== -1 ||
+    ref.indexOf("up-to-down.net") !== -1 ||
+    ref.indexOf("direct-link.net") !== -1 ||
+    ref.indexOf("linkvertise.net") !== -1
+  );
+}
+
 function sign(payload) {
   const data = typeof payload === "string" ? payload : JSON.stringify(payload);
   const b64 = Buffer.from(data).toString("base64url");
@@ -79,9 +101,7 @@ function verify(token) {
   }
 
   const parts = token.split(".");
-  if (parts.length !== 2) {
-    return null;
-  }
+  if (parts.length !== 2) return null;
 
   const b64 = parts[0];
   const sig = parts[1];
@@ -94,13 +114,8 @@ function verify(token) {
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
 
-  if (a.length !== b.length) {
-    return null;
-  }
-
-  if (!crypto.timingSafeEqual(a, b)) {
-    return null;
-  }
+  if (a.length !== b.length) return null;
+  if (!crypto.timingSafeEqual(a, b)) return null;
 
   try {
     return JSON.parse(Buffer.from(b64, "base64url").toString("utf8"));
@@ -140,23 +155,17 @@ function applyRateLimitHeaders(res, rate) {
 }
 
 async function isBanned(db, ip) {
-  if (!ip || ip === "unknown") {
-    return false;
-  }
-
+  if (!ip || ip === "unknown") return false;
   const now = Date.now();
   const record = await db.collection(BAN_COLLECTION).findOne({
     ip: ip,
     expiresAt: { $gt: now }
   });
-
   return Boolean(record);
 }
 
 async function banIp(db, ip, reason, meta) {
-  if (!ip || ip === "unknown") {
-    return;
-  }
+  if (!ip || ip === "unknown") return;
 
   const now = Date.now();
 
@@ -165,9 +174,7 @@ async function banIp(db, ip, reason, meta) {
     expiresAt: { $gt: now }
   });
 
-  if (existing) {
-    return;
-  }
+  if (existing) return;
 
   await db.collection(BAN_COLLECTION).updateOne(
     { ip: ip },
@@ -187,9 +194,7 @@ async function banIp(db, ip, reason, meta) {
 async function checkBanOrRespond(db, ip, res) {
   const banned = await isBanned(db, ip);
 
-  if (!banned) {
-    return false;
-  }
+  if (!banned) return false;
 
   const now = Date.now();
   const record = await db.collection(BAN_COLLECTION).findOne({ ip: ip });
@@ -209,6 +214,8 @@ module.exports = {
   checkRateLimit: checkRateLimit,
   getClientIp: getClientIp,
   getClientId: getClientId,
+  getFingerprint: getFingerprint,
+  isLinkvertiseReferer: isLinkvertiseReferer,
   sign: sign,
   verify: verify,
   generateKey: generateKey,
