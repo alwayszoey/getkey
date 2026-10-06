@@ -178,6 +178,82 @@
     } catch (e) {}
   }
 
+  function showGateModal(opts) {
+    return new Promise(function (resolve) {
+      var existing = document.getElementById("gateModal");
+      if (existing) existing.remove();
+
+      var overlay = document.createElement("div");
+      overlay.id = "gateModal";
+      overlay.className = "gate-modal-overlay";
+
+      overlay.innerHTML =
+        '<div class="gate-modal">' +
+        '  <div class="gate-modal-header">' +
+        '    <div class="gate-modal-icon">' +
+        '      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>' +
+        '        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>' +
+        '      </svg>' +
+        '    </div>' +
+        '    <div class="gate-modal-title">' + opts.title + '</div>' +
+        '    <div class="gate-modal-step">Step ' + opts.step + ' of ' + opts.total + '</div>' +
+        '  </div>' +
+        '  <div class="gate-modal-body">' +
+        '    <p>' + opts.description + '</p>' +
+        '    <div class="gate-modal-note">' +
+        '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '        <circle cx="12" cy="12" r="10"/>' +
+        '        <path d="M12 16v-4M12 8h.01"/>' +
+        '      </svg>' +
+        '      <span>' + opts.note + '</span>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div class="gate-modal-actions">' +
+        '    <button type="button" class="gate-btn gate-btn-ghost" data-action="cancel">Cancel</button>' +
+        '    <button type="button" class="gate-btn gate-btn-primary" data-action="confirm">' +
+        '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>' +
+        '        <polyline points="15 3 21 3 21 9"/>' +
+        '        <line x1="10" y1="14" x2="21" y2="3"/>' +
+        '      </svg>' +
+        '      <span>' + opts.confirmText + '</span>' +
+        '    </button>' +
+        '  </div>' +
+        '</div>';
+
+      document.body.appendChild(overlay);
+
+      requestAnimationFrame(function () {
+        overlay.classList.add("show");
+      });
+
+      function close(result) {
+        overlay.classList.remove("show");
+        setTimeout(function () {
+          overlay.remove();
+          resolve(result);
+        }, 200);
+      }
+
+      overlay.addEventListener("click", function (e) {
+        var action = e.target.closest("[data-action]");
+        if (!action) {
+          if (e.target === overlay) close(false);
+          return;
+        }
+        close(action.dataset.action === "confirm");
+      });
+
+      document.addEventListener("keydown", function esc(e) {
+        if (e.key === "Escape") {
+          document.removeEventListener("keydown", esc);
+          close(false);
+        }
+      });
+    });
+  }
+
   function startGate() {
     var hwid = HWID.get();
     var session = Auth.getSession();
@@ -196,8 +272,16 @@
           if (res.status === 403 && data.reason) {
             throw new Error("Banned: " + data.reason);
           }
-          throw new Error(data.error || "Failed to start");
+          throw new Error(data.error || "Failed to start (HTTP " + res.status + ")");
         }
+
+        if (!data.linkvertiseStep1 || !data.linkvertiseStep2) {
+          throw new Error(
+            "Gate is not configured. Admin must set " +
+            "LINKVERTISE_STEP1_URL and LINKVERTISE_STEP2_URL in Vercel, then redeploy."
+          );
+        }
+
         gate.step1Token = data.step1Token;
         gate.step1Url = data.linkvertiseStep1;
         gate.step2Url = data.linkvertiseStep2;
@@ -236,27 +320,30 @@
       return;
     }
 
-    var proceed = confirm(
-      "Step 1 of 2\n\n" +
-      "Open the sponsor link, wait for it to fully load, then come back.\n\n" +
-      "Click OK to open the link."
-    );
+    showGateModal({
+      title: "Open Sponsor Link",
+      step: 1,
+      total: 2,
+      description: "Click continue below. A new tab will open with the sponsor page. Wait for it to fully load, then come back here.",
+      note: "Closing the sponsor page early may break the verification.",
+      confirmText: "Open link"
+    }).then(function (ok) {
+      if (!ok) {
+        stopTimer();
+        return;
+      }
 
-    if (!proceed) {
-      stopTimer();
-      return;
-    }
+      openExternal(gate.step1Url);
 
-    openExternal(gate.step1Url);
+      btnText.textContent = "I finished step 1";
 
-    btnText.textContent = "I finished step 1";
+      var onStep1Done = function () {
+        btn.removeEventListener("click", onStep1Done);
+        step2Flow();
+      };
 
-    var onStep1Done = function () {
-      btn.removeEventListener("click", onStep1Done);
-      step2Flow();
-    };
-
-    btn.addEventListener("click", onStep1Done);
+      btn.addEventListener("click", onStep1Done);
+    });
   }
 
   function step2Flow() {
@@ -271,31 +358,35 @@
 
     setTimeout(function () {
       setLoading(false);
-      var proceed = confirm(
-        "Step 2 of 2\n\n" +
-        "Open the second sponsor link, wait for it to fully load, then come back.\n\n" +
-        "Click OK to open the link."
-      );
 
-      if (!proceed) {
-        stopTimer();
-        return;
-      }
-
-      openExternal(gate.step2Url);
-      btn.disabled = true;
-      btnText.textContent = "Claiming key...";
-      setLoading(true);
-
-      setTimeout(function () {
-        completeGate().then(function (data) {
-          paintKey(data.key, data);
-          runTimer(data.cooldownUntil);
-        }).catch(function (err) {
-          alert(err.message || "Failed to claim key");
+      showGateModal({
+        title: "Final Step",
+        step: 2,
+        total: 2,
+        description: "Click continue below. The second sponsor page will open. Wait for it to fully load, then come back.",
+        note: "After this step your key will be issued automatically.",
+        confirmText: "Open link"
+      }).then(function (ok) {
+        if (!ok) {
           stopTimer();
-        });
-      }, 6000);
+          return;
+        }
+
+        openExternal(gate.step2Url);
+        btn.disabled = true;
+        btnText.textContent = "Claiming key...";
+        setLoading(true);
+
+        setTimeout(function () {
+          completeGate().then(function (data) {
+            paintKey(data.key, data);
+            runTimer(data.cooldownUntil);
+          }).catch(function (err) {
+            alert(err.message || "Failed to claim key");
+            stopTimer();
+          });
+        }, 6000);
+      });
     }, 700);
   }
 
@@ -348,9 +439,9 @@
       step1Flow();
     }).catch(function (err) {
       setLoading(false);
-      alert(err.message || "Network error");
       btn.disabled = false;
       btnText.textContent = "Get key";
+      alert(err.message || "Network error");
     });
   });
 
