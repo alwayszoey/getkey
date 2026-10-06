@@ -1,15 +1,20 @@
 const { connectDB } = require("../_db");
-const { checkRateLimit, getClientId, hashKey, hashHwid, applyRateLimitHeaders } = require("../_security");
+const {
+  checkRateLimit,
+  getClientId,
+  getClientIp,
+  hashKey,
+  hashHwid,
+  applyRateLimitHeaders,
+  checkBanOrRespond
+} = require("../_security");
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
+  if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ valid: false, error: "Method not allowed" });
@@ -18,10 +23,13 @@ module.exports = async function handler(req, res) {
   const clientId = getClientId(req);
   const rate = checkRateLimit("verify", clientId);
   applyRateLimitHeaders(res, rate);
-
   if (!rate.allowed) {
     return res.status(429).json({ valid: false, reason: "rate_limited" });
   }
+
+  const db = await connectDB();
+  const ip = getClientIp(req);
+  if (await checkBanOrRespond(db, ip, res)) return;
 
   const body = req.body || {};
   const key = typeof body.key === "string" ? body.key.trim() : "";
@@ -36,9 +44,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const db = await connectDB();
     const keys = db.collection("keys");
-
     const keyHash = hashKey(key);
     const hwidHash = hashHwid(hwid);
     const now = Date.now();
@@ -64,8 +70,6 @@ module.exports = async function handler(req, res) {
     let bound = false;
 
     if (!record.hwidHash) {
-      const ip = ((req.headers["x-forwarded-for"] || "").split(",")[0] || "").trim() || "unknown";
-
       await keys.updateOne(
         { _id: record._id },
         {
@@ -76,7 +80,6 @@ module.exports = async function handler(req, res) {
           }
         }
       );
-
       bound = true;
     }
 
