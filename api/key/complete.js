@@ -16,6 +16,7 @@ const DURATION_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const MIN_STEP_ELAPSED_MS = 5000;
 const BAN_DURATION_MS = 60 * 60 * 1000;
+const LV_RETURN_MAX_AGE_MS = 10 * 60 * 1000;
 
 async function respondBanned(db, ip, res, reason) {
   const rec = await db.collection("ip_bans").findOne({ ip: ip });
@@ -58,7 +59,9 @@ module.exports = async function handler(req, res) {
 
   const claim = verify(step1Token);
   if (!claim || !claim.uid || claim.step !== 1 || claim.exp < Date.now()) {
-    await banIp(db, ip, "invalid_step1_token");
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "invalid_step1_token");
+    }
     return respondBanned(db, ip, res, "invalid_step1_token");
   }
 
@@ -66,7 +69,9 @@ module.exports = async function handler(req, res) {
   const record = await gate.findOne({ discordId: claim.uid });
 
   if (!record || record.consumed) {
-    await banIp(db, ip, "gate_not_started_or_consumed");
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "gate_not_started_or_consumed");
+    }
     return respondBanned(db, ip, res, "gate_not_started_or_consumed");
   }
 
@@ -74,16 +79,36 @@ module.exports = async function handler(req, res) {
   const elapsed = now - (record.step1At || 0);
 
   if (elapsed < MIN_STEP_ELAPSED_MS) {
-    await banIp(db, ip, "too_fast_step2", { elapsed: elapsed });
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "too_fast_step2", { elapsed: elapsed });
+    }
     return respondBanned(db, ip, res, "too_fast_step2");
   }
 
   if (record.hwid !== hwid) {
-    await banIp(db, ip, "hwid_mismatch_gate", {
-      expected: record.hwid,
-      got: hwid
-    });
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "hwid_mismatch_gate", {
+        expected: record.hwid,
+        got: hwid
+      });
+    }
     return respondBanned(db, ip, res, "hwid_mismatch_gate");
+  }
+
+  const lvReturn = await db.collection("linkvertise_returns").findOne({ ip: ip });
+
+  if (!lvReturn || !lvReturn.step2Returns) {
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "no_linkvertise_return", { step: "step2" });
+    }
+    return respondBanned(db, ip, res, "no_linkvertise_return");
+  }
+
+  if (now - (lvReturn.step2ReturnAt || lvReturn.lastReturnAt || 0) > LV_RETURN_MAX_AGE_MS) {
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "linkvertise_return_expired", { step: "step2" });
+    }
+    return respondBanned(db, ip, res, "linkvertise_return_expired");
   }
 
   const users = db.collection("users");
@@ -128,6 +153,7 @@ module.exports = async function handler(req, res) {
     issuedFromHwid: hwidHash,
     gateStep1At: record.step1At,
     gateStep2At: now,
+    lvStep2ReturnAt: lvReturn.step2ReturnAt || lvReturn.lastReturnAt,
     revoked: false,
     used: false,
     boundAt: null
@@ -137,6 +163,8 @@ module.exports = async function handler(req, res) {
     { discordId: claim.uid },
     { $set: { consumed: true, step2At: now, step2Ip: ip } }
   );
+
+  await db.collection("linkvertise_returns").deleteOne({ ip: ip });
 
   await users.updateOne(
     { discordId: claim.uid },
@@ -154,6 +182,7 @@ module.exports = async function handler(req, res) {
     ip: ip,
     action: "issued",
     gateElapsedMs: elapsed,
+    lvVerified: true,
     expireAt: expireAt,
     at: new Date()
   });
