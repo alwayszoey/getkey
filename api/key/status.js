@@ -3,10 +3,13 @@ const {
   checkRateLimit,
   getClientId,
   getClientIp,
+  sign,
   verify,
   applyRateLimitHeaders,
-  checkBanOrRespond
+  isBanned
 } = require("../_security");
+
+const BAN_DURATION_MS = 60 * 60 * 1000;
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -20,46 +23,78 @@ module.exports = async function handler(req, res) {
   }
 
   const clientId = getClientId(req);
-  const rate = checkRateLimit("status", clientId);
+  const rate = checkRateLimit("start", clientId);
   applyRateLimitHeaders(res, rate);
-  if (!rate.allowed) return res.status(429).json({ error: "Too many requests" });
+  if (!rate.allowed) {
+    return res.status(429).json({ error: "Too many requests" });
+  }
 
   const db = await connectDB();
   const ip = getClientIp(req);
-  if (await checkBanOrRespond(db, ip, res)) return;
+
+  if (await isBanned(db, ip)) {
+    const rec = await db.collection("ip_bans").findOne({ ip: ip });
+    return res.status(403).json({
+      error: "Banned",
+      reason: rec ? rec.reason : "policy_violation",
+      banned: true,
+      expiresAt: rec ? rec.expiresAt : (Date.now() + BAN_DURATION_MS)
+    });
+  }
 
   const body = req.body || {};
+  const hwid = typeof body.hwid === "string" ? body.hwid : "";
   const session = typeof body.session === "string" ? body.session : "";
+  const type = typeof body.type === "string" ? body.type : "";
+
+  if (type !== "1day") {
+    return res.status(400).json({ error: "Invalid key type" });
+  }
+
+  if (!hwid || hwid.length < 8 || hwid.length > 256) {
+    return res.status(400).json({ error: "Invalid hardware id" });
+  }
 
   const claim = verify(session);
   if (!claim || !claim.uid || claim.exp < Date.now()) {
-    return res.status(401).json({ error: "Invalid session" });
+    return res.status(401).json({ error: "Invalid or expired session" });
   }
 
-  try {
-    const keys = db.collection("keys");
-    const now = Date.now();
-
-    const latest = await keys.findOne(
-      { discordId: claim.uid },
-      { sort: { issuedAt: -1 } }
-    );
-
-    if (!latest) {
-      return res.status(200).json({ locked: false });
-    }
-
-    const unlockAt = Math.max(latest.cooldownUntil || 0, latest.expireAt || 0);
-    const locked = unlockAt > now;
-
-    return res.status(200).json({
-      locked,
-      unlockAt: locked ? unlockAt : 0,
-      type: latest.type,
-      expiresAt: latest.expireAt
-    });
-  } catch (err) {
-    console.error("[status]", err.message);
-    return res.status(500).json({ error: "Internal error" });
+  const users = db.collection("users");
+  const user = await users.findOne({ discordId: claim.uid });
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
   }
+
+  const gate = db.collection("gate_tokens");
+
+  await gate.updateOne(
+    { discordId: claim.uid },
+    {
+      $set: {
+        discordId: claim.uid,
+        hwid: hwid,
+        type: type,
+        step1At: Date.now(),
+        step1Ip: ip,
+        step2At: null,
+        step2Ip: null,
+        consumed: false
+      }
+    },
+    { upsert: true }
+  );
+
+  const step1Token = sign({
+    uid: claim.uid,
+    step: 1,
+    iat: Date.now(),
+    exp: Date.now() + 1000 * 60 * 10
+  });
+
+  return res.status(200).json({
+    step1Token: step1Token,
+    linkvertiseStep1: process.env.LINKVERTISE_STEP1_URL || null,
+    linkvertiseStep2: process.env.LINKVERTISE_STEP2_URL || null
+  });
 };
