@@ -31,6 +31,9 @@
   var currentKey = null;
   var timer = null;
   var banTimer = null;
+  var banExpiresAt = null;
+  var banCheckIv = null;
+
   var gate = {
     step1Token: null,
     step1Url: null,
@@ -169,12 +172,22 @@
 
   function showBanModal(banInfo) {
     return new Promise(function (resolve) {
+      var expiresAt = banInfo.expiresAt || (Date.now() + 60 * 60 * 1000);
+
+      if (banExpiresAt && expiresAt <= banExpiresAt) {
+        var existingTimer = document.getElementById("banTimer");
+        if (existingTimer) {
+          existingTimer.textContent = formatBanTime(Math.max(0, banExpiresAt - Date.now()));
+        }
+        resolve();
+        return;
+      }
+
       var existing = document.getElementById("banModal");
       if (existing) existing.remove();
 
       if (banTimer) clearInterval(banTimer);
-
-      var expiresAt = banInfo.expiresAt || (Date.now() + 60 * 60 * 1000);
+      banExpiresAt = expiresAt;
 
       var overlay = document.createElement("div");
       overlay.id = "banModal";
@@ -226,10 +239,11 @@
       timerEl.textContent = formatBanTime(Math.max(0, expiresAt - Date.now()));
 
       banTimer = setInterval(function () {
-        var left = expiresAt - Date.now();
+        var left = banExpiresAt - Date.now();
         if (left <= 0) {
           clearInterval(banTimer);
           banTimer = null;
+          banExpiresAt = null;
           timerEl.textContent = "00:00:00";
           return;
         }
@@ -237,10 +251,6 @@
       }, 1000);
 
       function close() {
-        if (banTimer) {
-          clearInterval(banTimer);
-          banTimer = null;
-        }
         overlay.style.pointerEvents = "none";
         overlay.classList.remove("show");
         setTimeout(function () {
@@ -261,6 +271,30 @@
         }
       });
     });
+  }
+
+  function startBanPolling() {
+    if (banCheckIv) return;
+
+    banCheckIv = setInterval(function () {
+      if (!Auth.isLoggedIn()) return;
+
+      fetch("/api/key/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: Auth.getSession() })
+      }).then(function (res) {
+        if (res.status !== 403) return null;
+        return res.json();
+      }).then(function (data) {
+        if (data && data.banned && data.expiresAt) {
+          showBanModal({
+            reason: data.reason,
+            expiresAt: data.expiresAt
+          });
+        }
+      }).catch(function () {});
+    }, 30000);
   }
 
   async function loadStatus() {
@@ -311,6 +345,7 @@
     loginBox.style.display = "none";
     contentBox.style.display = "block";
     loadStatus();
+    startBanPolling();
   }
 
   function showLoggedOut() {
