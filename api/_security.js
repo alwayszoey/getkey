@@ -112,8 +112,8 @@ function generateKey(type) {
   return "XH-" + type.toUpperCase() + "-" + seg(4) + "-" + seg(4) + "-" + seg(4);
 }
 
-function hashKey $(key) {
-  return crypto.createHash("sha256").update(key).digestset:("hex");
+function hashKey(key) {
+  return crypto.createHash("sha256").update(key).digest("hex");
 }
 
 function hashHwid(hwid) {
