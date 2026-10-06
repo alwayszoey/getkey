@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const secret = req.headers["x-bot-secret"];
+  const secret = req.headers["x-bot-secret"] || req.query.secret;
   if (!secret || secret !== process.env.BOT_SECRET) {
     return res.status(401).json({ error: "Unauthorized" });
   }
