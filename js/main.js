@@ -588,25 +588,6 @@
         setTimeout(function () {
           openExternal(gate.step2Url);
         }, 150);
-
-        setTimeout(function () {
-          completeGate().then(function (data) {
-            clearGateState();
-            delete btn.dataset.gateStage;
-            paintKey(data.key, data);
-            runTimer(data.cooldownUntil);
-          }).catch(function (err) {
-            clearGateState();
-            delete btn.dataset.gateStage;
-            if (err && err.__banned) {
-              btnText.textContent = "Get key";
-              setLoading(false);
-              return;
-            }
-            alert(err.message || "Failed to claim key");
-            stopTimer();
-          });
-        }, 6000);
       });
     }, 700);
   }
@@ -614,7 +595,76 @@
   function resumeGate() {
     if (!restoreGateState()) return false;
 
-    if (gate.stage === "step2") {
+    if (gate.stage === "step1") {
+      btn.dataset.gateStage = "step1";
+      btnText.textContent = "I finished step 1";
+
+      var onStep1Done = function () {
+        btn.removeEventListener("click", onStep1Done);
+        step2Flow();
+      };
+
+      btn.addEventListener("click", onStep1Done);
+
+      return true;
+    }
+
+    return false;
+  }
+
+  function handleGateQuery() {
+    var params = new URLSearchParams(window.location.search);
+    var gateStage = params.get("gate");
+
+    if (!gateStage) return false;
+
+    try {
+      var cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, "", cleanUrl);
+    } catch (e) {}
+
+    if (gateStage === "step1") {
+      if (!restoreGateState()) {
+        return false;
+      }
+
+      gate.stage = "step1";
+      saveGateState();
+
+      btn.dataset.gateStage = "step1";
+      btnText.textContent = "I finished step 1";
+      setLoading(false);
+
+      var onStep1Done = function () {
+        btn.removeEventListener("click", onStep1Done);
+        step2Flow();
+      };
+
+      btn.addEventListener("click", onStep1Done);
+
+      return true;
+    }
+
+    if (gateStage === "step2") {
+      if (!restoreGateState()) {
+        fetch("/api/key/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ step1Token: "invalid", hwid: HWID.get() })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d && d.banned) {
+            showBanModal({
+              reason: d.reason,
+              expiresAt: d.expiresAt
+            });
+          }
+        }).catch(function () {});
+        return true;
+      }
+
+      gate.stage = "step2";
+      saveGateState();
+
       btn.dataset.gateStage = "step2";
       btn.disabled = true;
       btnText.textContent = "Claiming key...";
@@ -637,21 +687,7 @@
           alert(err.message || "Failed to claim key");
           stopTimer();
         });
-      }, 1500);
-
-      return true;
-    }
-
-    if (gate.stage === "step1") {
-      btn.dataset.gateStage = "step1";
-      btnText.textContent = "I finished step 1";
-
-      var onStep1Done = function () {
-        btn.removeEventListener("click", onStep1Done);
-        step2Flow();
-      };
-
-      btn.addEventListener("click", onStep1Done);
+      }, 1200);
 
       return true;
     }
@@ -722,7 +758,10 @@
 
   if (Auth.isLoggedIn()) {
     showLoggedIn();
-    resumeGate();
+    var handled = handleGateQuery();
+    if (!handled) {
+      resumeGate();
+    }
   } else {
     showLoggedOut();
   }
