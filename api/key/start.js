@@ -6,8 +6,10 @@ const {
   sign,
   verify,
   applyRateLimitHeaders,
-  checkBanOrRespond
+  isBanned
 } = require("../_security");
+
+const BAN_DURATION_MS = 60 * 60 * 1000;
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -23,11 +25,22 @@ module.exports = async function handler(req, res) {
   const clientId = getClientId(req);
   const rate = checkRateLimit("start", clientId);
   applyRateLimitHeaders(res, rate);
-  if (!rate.allowed) return res.status(429).json({ error: "Too many requests" });
+  if (!rate.allowed) {
+    return res.status(429).json({ error: "Too many requests" });
+  }
 
   const db = await connectDB();
   const ip = getClientIp(req);
-  if (await checkBanOrRespond(db, ip, res)) return;
+
+  if (await isBanned(db, ip)) {
+    const rec = await db.collection("ip_bans").findOne({ ip: ip });
+    return res.status(403).json({
+      error: "Banned",
+      reason: rec ? rec.reason : "policy_violation",
+      banned: true,
+      expiresAt: rec ? rec.expiresAt : (Date.now() + BAN_DURATION_MS)
+    });
+  }
 
   const body = req.body || {};
   const hwid = typeof body.hwid === "string" ? body.hwid : "";
@@ -80,7 +93,7 @@ module.exports = async function handler(req, res) {
   });
 
   return res.status(200).json({
-    step1Token,
+    step1Token: step1Token,
     linkvertiseStep1: process.env.LINKVERTISE_STEP1_URL || null,
     linkvertiseStep2: process.env.LINKVERTISE_STEP2_URL || null
   });
