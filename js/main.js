@@ -507,7 +507,10 @@
   }
 
   function step1Flow() {
-    if (btn.dataset.gateStage === "step1" || btn.dataset.gateStage === "step2") {
+    if (btn.dataset.gateStage === "step1" ||
+        btn.dataset.gateStage === "step1_pending" ||
+        btn.dataset.gateStage === "step2" ||
+        btn.dataset.gateStage === "step2_pending") {
       return;
     }
 
@@ -530,25 +533,21 @@
         return;
       }
 
-      gate.stage = "step1";
+      gate.stage = "step1_pending";
       saveGateState();
 
-      btn.dataset.gateStage = "step1";
-      btnText.textContent = "I finished step 1";
+      btn.dataset.gateStage = "step1_pending";
+      btnText.textContent = "Waiting for return...";
+      setLoading(true);
 
-      var onStep1Done = function () {
-        btn.removeEventListener("click", onStep1Done);
-        step2Flow();
-      };
-
-      btn.addEventListener("click", onStep1Done);
-
-      openExternal(gate.step1Url);
+      setTimeout(function () {
+        openExternal(gate.step1Url);
+      }, 150);
     });
   }
 
   function step2Flow() {
-    if (btn.dataset.gateStage === "step2") {
+    if (btn.dataset.gateStage === "step2" || btn.dataset.gateStage === "step2_pending") {
       return;
     }
 
@@ -577,12 +576,12 @@
           return;
         }
 
-        gate.stage = "step2";
+        gate.stage = "step2_pending";
         saveGateState();
 
-        btn.dataset.gateStage = "step2";
+        btn.dataset.gateStage = "step2_pending";
         btn.disabled = true;
-        btnText.textContent = "Claiming key...";
+        btnText.textContent = "Waiting for return...";
         setLoading(true);
 
         setTimeout(function () {
@@ -595,9 +594,15 @@
   function resumeGate() {
     if (!restoreGateState()) return false;
 
-    if (gate.stage === "step1") {
+    if (gate.stage === "step1_pending" || gate.stage === "step2_pending") {
+      clearGateState();
+      return false;
+    }
+
+    if (gate.stage === "step1_passed") {
       btn.dataset.gateStage = "step1";
       btnText.textContent = "I finished step 1";
+      setLoading(false);
 
       var onStep1Done = function () {
         btn.removeEventListener("click", onStep1Done);
@@ -609,14 +614,54 @@
       return true;
     }
 
+    if (gate.stage === "step2_passed") {
+      btn.dataset.gateStage = "step2";
+      btn.disabled = true;
+      btnText.textContent = "Claiming key...";
+      setLoading(true);
+
+      setTimeout(function () {
+        completeGate().then(function (data) {
+          clearGateState();
+          delete btn.dataset.gateStage;
+          paintKey(data.key, data);
+          runTimer(data.cooldownUntil);
+        }).catch(function (err) {
+          clearGateState();
+          delete btn.dataset.gateStage;
+          if (err && err.__banned) {
+            btnText.textContent = "Get key";
+            setLoading(false);
+            return;
+          }
+          alert(err.message || "Failed to claim key");
+          stopTimer();
+        });
+      }, 1200);
+
+      return true;
+    }
+
     return false;
   }
 
-  function handleGateQuery() {
+  function detectGateReturn() {
     var params = new URLSearchParams(window.location.search);
     var gateStage = params.get("gate");
 
-    if (!gateStage) return false;
+    if (!gateStage) {
+      var raw = localStorage.getItem(GATE_KEY);
+      if (raw) {
+        try {
+          var s = JSON.parse(raw);
+          if (s && (s.stage === "step1_pending" || s.stage === "step2_pending")) {
+            localStorage.removeItem(GATE_KEY);
+            stopTimer();
+          }
+        } catch (e) {}
+      }
+      return false;
+    }
 
     try {
       var cleanUrl = window.location.pathname + window.location.hash;
@@ -624,11 +669,9 @@
     } catch (e) {}
 
     if (gateStage === "step1") {
-      if (!restoreGateState()) {
-        return false;
-      }
+      if (!restoreGateState()) return false;
 
-      gate.stage = "step1";
+      gate.stage = "step1_passed";
       saveGateState();
 
       btn.dataset.gateStage = "step1";
@@ -662,7 +705,7 @@
         return true;
       }
 
-      gate.stage = "step2";
+      gate.stage = "step2_passed";
       saveGateState();
 
       btn.dataset.gateStage = "step2";
@@ -731,7 +774,10 @@
   });
 
   btn.addEventListener("click", function () {
-    if (btn.dataset.gateStage === "step1" || btn.dataset.gateStage === "step2") {
+    if (btn.dataset.gateStage === "step1" ||
+        btn.dataset.gateStage === "step1_pending" ||
+        btn.dataset.gateStage === "step2" ||
+        btn.dataset.gateStage === "step2_pending") {
       return;
     }
 
@@ -758,7 +804,7 @@
 
   if (Auth.isLoggedIn()) {
     showLoggedIn();
-    var handled = handleGateQuery();
+    var handled = detectGateReturn();
     if (!handled) {
       resumeGate();
     }
