@@ -4,6 +4,7 @@ const {
   getClientId,
   getClientIp,
   sign,
+  verify,
   applyRateLimitHeaders,
   checkBanOrRespond
 } = require("../_security");
@@ -20,15 +21,12 @@ module.exports = async function handler(req, res) {
   }
 
   const clientId = getClientId(req);
-  const rate = checkRateLimit("issue", clientId);
+  const rate = checkRateLimit("start", clientId);
   applyRateLimitHeaders(res, rate);
-  if (!rate.allowed) {
-    return res.status(429).json({ error: "Too many requests" });
-  }
+  if (!rate.allowed) return res.status(429).json({ error: "Too many requests" });
 
   const db = await connectDB();
   const ip = getClientIp(req);
-
   if (await checkBanOrRespond(db, ip, res)) return;
 
   const body = req.body || {};
@@ -44,9 +42,15 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "Invalid hardware id" });
   }
 
-  const claim = require("../_security").verify(session);
+  const claim = verify(session);
   if (!claim || !claim.uid || claim.exp < Date.now()) {
     return res.status(401).json({ error: "Invalid or expired session" });
+  }
+
+  const users = db.collection("users");
+  const user = await users.findOne({ discordId: claim.uid });
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
   }
 
   const gate = db.collection("gate_tokens");
