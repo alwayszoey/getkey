@@ -2,12 +2,12 @@
   "use strict";
 
   var LINES = [
-    "หยุดตรงนี้เลยครับพี่",
-    "คีย์กูแจกฟรีอยู่แล้ว จะหา bypass กันไปทำไม",
-    "อ่านตรงนี้แล้วสำนึกซะนะ",
-    "โค้ดทั้งหมดอยู่บน server ฝั่งนี้แกะไปก็ไม่มีอะไร",
-    "rate limit ก็มี ban ก็มี ทำตัวดี ๆ เถอะ",
-    "เขียนฟรีให้ด้วยใจ อย่าให้ต้องปิดเว็บเลย"
+    "Stop right there.",
+    "Everything is server-side. Nothing to find here.",
+    "You are wasting your time inspecting this page.",
+    "Rate limits and IP bans are active on the API.",
+    "The gate is enforced on the backend, not the client.",
+    "Good luck, but you will not get anything from here."
   ];
 
   var S1 = "color:#ef4444;font-size:20px;font-weight:900;";
@@ -23,7 +23,7 @@
     try { console.clear(); } catch (e) {}
 
     try {
-      console.log("%cหยุดครับ", S1);
+      console.log("%cHalt", S1);
       for (var i = 0; i < LINES.length; i++) {
         console.log("%c" + LINES[i], i % 2 ? S3 : S2);
       }
@@ -32,7 +32,7 @@
 
   setInterval(function () {
     if (!fired) return;
-    try { console.log("%cยังอยู่อีกเหรอ", S3); } catch (e) {}
+    try { console.log("%cStill here?", S3); } catch (e) {}
   }, 3000);
 
   function probe() {
