@@ -14,6 +14,7 @@ const {
 
 const DURATION_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const MIN_STEP_ELAPSED_MS = 5000;
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -27,19 +28,17 @@ module.exports = async function handler(req, res) {
   }
 
   const clientId = getClientId(req);
-  const rate = checkRateLimit("issue", clientId);
+  const rate = checkRateLimit("complete", clientId);
   applyRateLimitHeaders(res, rate);
-  if (!rate.allowed) {
-    return res.status(429).json({ error: "Too many requests" });
-  }
+  if (!rate.allowed) return res.status(429).json({ error: "Too many requests" });
 
   const db = await connectDB();
   const ip = getClientIp(req);
-
   if (await checkBanOrRespond(db, ip, res)) return;
 
   const body = req.body || {};
   const step1Token = typeof body.step1Token === "string" ? body.step1Token : "";
+  const hwid = typeof body.hwid === "string" ? body.hwid : "";
 
   const claim = verify(step1Token);
   if (!claim || !claim.uid || claim.step !== 1 || claim.exp < Date.now()) {
@@ -58,13 +57,16 @@ module.exports = async function handler(req, res) {
   const now = Date.now();
   const elapsed = now - (record.step1At || 0);
 
-  if (elapsed < 3000) {
+  if (elapsed < MIN_STEP_ELAPSED_MS) {
     await banIp(db, ip, "too_fast_step2", { elapsed });
     return res.status(403).json({ error: "Too fast, complete the steps properly" });
   }
 
-  if (record.hwid !== body.hwid) {
-    await banIp(db, ip, "hwid_mismatch_gate", { expected: record.hwid, got: body.hwid });
+  if (record.hwid !== hwid) {
+    await banIp(db, ip, "hwid_mismatch_gate", {
+      expected: record.hwid,
+      got: hwid
+    });
     return res.status(403).json({ error: "HWID mismatch" });
   }
 
