@@ -1,7 +1,14 @@
 const { connectDB } = require("../_db");
 const { generateKey, hashKey } = require("../_security");
 
-const DURATION_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const DURATIONS = {
+  "1day": 1 * DAY_MS,
+  "3day": 3 * DAY_MS,
+  "7day": 7 * DAY_MS,
+  "lifetime": 100 * 365 * DAY_MS
+};
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -19,8 +26,13 @@ module.exports = async function handler(req, res) {
   const body = req.body || {};
   const userId = typeof body.userId === "string" ? body.userId : "";
   const type = typeof body.type === "string" ? body.type : "1day";
+  const amount = Math.min(Math.max(parseInt(body.amount) || 1, 1), 25);
 
   if (!userId) return res.status(400).json({ error: "Missing userId" });
+
+  if (!DURATIONS[type]) {
+    return res.status(400).json({ error: "Invalid key type. Use: 1day, 3day, 7day, lifetime" });
+  }
 
   try {
     const db = await connectDB();
@@ -29,35 +41,44 @@ module.exports = async function handler(req, res) {
 
     const user = await users.findOne({ discordId: String(userId) });
     const now = Date.now();
-    const plain = generateKey(type);
-    const keyHash = hashKey(plain);
-    const expireAt = now + DURATION_MS;
-    const cooldownUntil = now + DURATION_MS;
+    const duration = DURATIONS[type];
+    const expireAt = now + duration;
+    const cooldownUntil = now + duration;
 
-    await keys.insertOne({
-      key: plain,
-      keyHash: keyHash,
-      type: type,
-      discordId: String(userId),
-      username: user ? user.username : "admin-generated",
-      hwidHash: null,
-      issuedAt: now,
-      expireAt: expireAt,
-      cooldownUntil: cooldownUntil,
-      issuedIp: "admin-bot",
-      issuedFromHwid: "admin-bot",
-      gateStep1At: null,
-      gateStep2At: null,
-      lvStep2ReturnAt: null,
-      revoked: false,
-      used: false,
-      boundAt: null,
-      adminGenerated: true
-    });
+    const generatedKeys = [];
+
+    for (let i = 0; i < amount; i++) {
+      const plain = generateKey(type);
+      const keyHash = hashKey(plain);
+
+      await keys.insertOne({
+        key: plain,
+        keyHash: keyHash,
+        type: type,
+        discordId: String(userId),
+        username: user ? user.username : "admin-generated",
+        hwidHash: null,
+        issuedAt: now,
+        expireAt: expireAt,
+        cooldownUntil: cooldownUntil,
+        issuedIp: "admin-bot",
+        issuedFromHwid: "admin-bot",
+        gateStep1At: null,
+        gateStep2At: null,
+        lvStep2ReturnAt: null,
+        revoked: false,
+        used: false,
+        boundAt: null,
+        adminGenerated: true
+      });
+
+      generatedKeys.push(plain);
+    }
 
     return res.status(200).json({
       ok: true,
-      key: plain,
+      keys: generatedKeys,
+      amount: amount,
       type: type,
       expireAt: expireAt,
       cooldownUntil: cooldownUntil
