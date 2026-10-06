@@ -26,6 +26,19 @@
     },
 
     logout: function () {
+      var user = this.getUser();
+
+      if (user && user.id) {
+        try {
+          fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ discordId: user.id }),
+            keepalive: true
+          });
+        } catch (e) {}
+      }
+
       localStorage.removeItem(C.KEY_SESSION);
       localStorage.removeItem(C.KEY_DISCORD);
     },
