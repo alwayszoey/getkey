@@ -23,7 +23,7 @@ module.exports = async function handler(req, res) {
   }
 
   const clientId = getClientId(req);
-  const rate = checkRateLimit("start", clientId);
+  const rate = checkRateLimit("status", clientId);
   applyRateLimitHeaders(res, rate);
   if (!rate.allowed) {
     return res.status(429).json({ error: "Too many requests" });
@@ -43,27 +43,11 @@ module.exports = async function handler(req, res) {
   }
 
   const body = req.body || {};
-  const hwid = typeof body.hwid === "string" ? body.hwid : "";
   const session = typeof body.session === "string" ? body.session : "";
-  const type = typeof body.type === "string" ? body.type : "";
-
-  if (type !== "1day") {
-    return res.status(400).json({ error: "Invalid key type" });
-  }
-
-  if (!hwid || hwid.length < 8 || hwid.length > 256) {
-    return res.status(400).json({ error: "Invalid hardware id" });
-  }
 
   const claim = verify(session);
   if (!claim || !claim.uid || claim.exp < Date.now()) {
     return res.status(401).json({ error: "Invalid or expired session" });
-  }
-
-  const users = db.collection("users");
-  const user = await users.findOne({ discordId: claim.uid });
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
   }
 
   const now = Date.now();
@@ -79,11 +63,30 @@ module.exports = async function handler(req, res) {
 
   if (activeKey) {
     const unlockAt = Math.max(activeKey.cooldownUntil || 0, activeKey.expireAt || 0);
-    return res.status(429).json({
-      error: "Cooldown active",
+    return res.status(200).json({
+      locked: true,
       unlockAt: unlockAt,
-      locked: true
+      expireAt: activeKey.expireAt || null,
+      cooldownUntil: activeKey.cooldownUntil || null,
+      type: activeKey.type || "1day"
     });
+  }
+
+  const hwid = typeof body.hwid === "string" ? body.hwid : "";
+  const type = typeof body.type === "string" ? body.type : "";
+
+  if (type !== "1day") {
+    return res.status(200).json({ locked: false });
+  }
+
+  if (!hwid || hwid.length < 8 || hwid.length > 256) {
+    return res.status(200).json({ locked: false });
+  }
+
+  const users = db.collection("users");
+  const user = await users.findOne({ discordId: claim.uid });
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
   }
 
   const gate = db.collection("gate_tokens");
@@ -113,6 +116,7 @@ module.exports = async function handler(req, res) {
   });
 
   return res.status(200).json({
+    locked: false,
     step1Token: step1Token,
     linkvertiseStep1: process.env.LINKVERTISE_STEP1_URL || null,
     linkvertiseStep2: process.env.LINKVERTISE_STEP2_URL || null
