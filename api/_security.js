@@ -160,6 +160,15 @@ async function banIp(db, ip, reason, meta) {
 
   const now = Date.now();
 
+  const existing = await db.collection(BAN_COLLECTION).findOne({
+    ip: ip,
+    expiresAt: { $gt: now }
+  });
+
+  if (existing) {
+    return;
+  }
+
   await db.collection(BAN_COLLECTION).updateOne(
     { ip: ip },
     {
@@ -187,9 +196,10 @@ async function checkBanOrRespond(db, ip, res) {
   const remain = record ? Math.max(0, record.expiresAt - now) : BAN_DURATION_MS;
 
   res.status(403).json({
-    error: "Temporarily banned",
+    error: "Banned",
     reason: record ? record.reason : "policy_violation",
-    retryAfterMs: remain
+    banned: true,
+    expiresAt: record ? record.expiresAt : (now + BAN_DURATION_MS)
   });
 
   return true;
