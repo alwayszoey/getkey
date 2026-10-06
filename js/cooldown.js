@@ -42,13 +42,4 @@
   var Time = {
     format: function (ms) {
       var s = Math.max(0, Math.floor(ms / 1000));
-      var hh = String(Math.floor(s / 3600)).padStart(2, "0");
-      var mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-      var ss = String(s % 60).padStart(2, "0");
-      return hh + ":" + mm + ":" + ss;
-    }
-  };
-
-  window.GetkeyHWID = HWID;
-  window.GetkeyTime = Time;
-})();
+      var hh = String(Math.floor(s / 3600)).padStart(2, "
