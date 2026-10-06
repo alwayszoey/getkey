@@ -26,11 +26,12 @@ module.exports = async function handler(req, res) {
 
   const db = await connectDB();
   const ip = getClientIp(req);
-
   if (await checkBanOrRespond(db, ip, res)) return;
 
   await banIp(db, ip, "direct_issue_endpoint");
+
   return res.status(403).json({
-    error: "Direct issue blocked. Complete the gate flow at /api/key/start and /api/key/complete."
+    error: "Direct issue blocked",
+    hint: "Use /api/key/start then /api/key/complete"
   });
 };
