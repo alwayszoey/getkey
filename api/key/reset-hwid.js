@@ -5,7 +5,8 @@ const {
   getClientIp,
   verify,
   hashHwid,
-  applyRateLimitHeaders
+  applyRateLimitHeaders,
+  checkBanOrRespond
 } = require("../_security");
 
 module.exports = async function handler(req, res) {
@@ -13,10 +14,7 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
+  if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
@@ -25,9 +23,11 @@ module.exports = async function handler(req, res) {
   const clientId = getClientId(req);
   const rate = checkRateLimit("reset", clientId);
   applyRateLimitHeaders(res, rate);
-  if (!rate.allowed) {
-    return res.status(429).json({ error: "Too many requests" });
-  }
+  if (!rate.allowed) return res.status(429).json({ error: "Too many requests" });
+
+  const db = await connectDB();
+  const ip = getClientIp(req);
+  if (await checkBanOrRespond(db, ip, res)) return;
 
   const body = req.body || {};
   const session = typeof body.session === "string" ? body.session : "";
@@ -43,12 +43,10 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const db = await connectDB();
     const users = db.collection("users");
     const keys = db.collection("keys");
 
     const now = Date.now();
-    const ip = getClientIp(req);
     const newHash = hashHwid(newHwid);
 
     const user = await users.findOne({ discordId: claim.uid });
