@@ -119,7 +119,7 @@
 
   function saveGateState() {
     try {
-      sessionStorage.setItem(GATE_KEY, JSON.stringify({
+      localStorage.setItem(GATE_KEY, JSON.stringify({
         step1Token: gate.step1Token,
         step1Url: gate.step1Url,
         step2Url: gate.step2Url,
@@ -131,14 +131,14 @@
 
   function restoreGateState() {
     try {
-      var raw = sessionStorage.getItem(GATE_KEY);
+      var raw = localStorage.getItem(GATE_KEY);
       if (!raw) return false;
 
       var s = JSON.parse(raw);
       if (!s || !s.step1Token) return false;
 
       if (Date.now() - (s.startedAt || 0) > GATE_TTL) {
-        sessionStorage.removeItem(GATE_KEY);
+        localStorage.removeItem(GATE_KEY);
         return false;
       }
 
@@ -154,7 +154,7 @@
 
   function clearGateState() {
     try {
-      sessionStorage.removeItem(GATE_KEY);
+      localStorage.removeItem(GATE_KEY);
     } catch (e) {}
   }
 
@@ -209,10 +209,6 @@
   function openExternal(url) {
     if (!url) return;
     if (document.getElementById("gateModal")) return;
-
-    try {
-      sessionStorage.setItem("gk.gate.return", "1");
-    } catch (e) {}
 
     window.location.href = url;
   }
@@ -476,7 +472,7 @@
           alert(err.message || "Failed to claim key");
           stopTimer();
         });
-      }, 2000);
+      }, 1500);
 
       return true;
     }
