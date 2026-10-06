@@ -3,6 +3,7 @@ const {
   checkRateLimit,
   getClientId,
   getClientIp,
+  getFingerprint,
   verify,
   generateKey,
   hashKey,
@@ -14,7 +15,7 @@ const {
 
 const DURATION_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const MIN_STEP_ELAPSED_MS = 5000;
+const MIN_STEP_ELAPSED_MS = 8000;
 const BAN_DURATION_MS = 60 * 60 * 1000;
 const LV_RETURN_MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -95,20 +96,41 @@ module.exports = async function handler(req, res) {
     return respondBanned(db, ip, res, "hwid_mismatch_gate");
   }
 
-  const lvReturn = await db.collection("linkvertise_returns").findOne({ ip: ip });
+  const fp = getFingerprint(req);
+  if (record.step1Fingerprint && record.step1Fingerprint !== fp) {
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "fingerprint_mismatch_complete", {
+        expected: record.step1Fingerprint.slice(0, 8) + "...",
+        got: fp.slice(0, 8) + "..."
+      });
+    }
+    return respondBanned(db, ip, res, "fingerprint_mismatch_complete");
+  }
+
+  const lvReturn = await db.collection("linkvertise_returns").findOne({
+    uid: claim.uid
+  });
 
   if (!lvReturn || !lvReturn.step2Returns) {
     if (!await isBanned(db, ip)) {
-      await banIp(db, ip, "no_linkvertise_return", { step: "step2" });
+      await banIp(db, ip, "no_linkvertise_return", { uid: claim.uid });
     }
     return respondBanned(db, ip, res, "no_linkvertise_return");
   }
 
-  if (now - (lvReturn.step2ReturnAt || lvReturn.lastReturnAt || 0) > LV_RETURN_MAX_AGE_MS) {
+  const returnAt = lvReturn.step2ReturnAt || lvReturn.lastReturnAt || 0;
+  if (now - returnAt > LV_RETURN_MAX_AGE_MS) {
     if (!await isBanned(db, ip)) {
-      await banIp(db, ip, "linkvertise_return_expired", { step: "step2" });
+      await banIp(db, ip, "linkvertise_return_expired");
     }
     return respondBanned(db, ip, res, "linkvertise_return_expired");
+  }
+
+  if (returnAt <= record.step1At) {
+    if (!await isBanned(db, ip)) {
+      await banIp(db, ip, "return_before_start");
+    }
+    return respondBanned(db, ip, res, "return_before_start");
   }
 
   const users = db.collection("users");
@@ -153,7 +175,7 @@ module.exports = async function handler(req, res) {
     issuedFromHwid: hwidHash,
     gateStep1At: record.step1At,
     gateStep2At: now,
-    lvStep2ReturnAt: lvReturn.step2ReturnAt || lvReturn.lastReturnAt,
+    lvStep2ReturnAt: returnAt,
     revoked: false,
     used: false,
     boundAt: null
@@ -161,10 +183,10 @@ module.exports = async function handler(req, res) {
 
   await gate.updateOne(
     { discordId: claim.uid },
-    { $set: { consumed: true, step2At: now, step2Ip: ip } }
+    { $set: { consumed: true, step2At: now, step2Ip: ip, step2Fingerprint: fp } }
   );
 
-  await db.collection("linkvertise_returns").deleteOne({ ip: ip });
+  await db.collection("linkvertise_returns").deleteOne({ uid: claim.uid });
 
   await users.updateOne(
     { discordId: claim.uid },
