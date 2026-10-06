@@ -8,13 +8,24 @@ const {
   hashKey,
   hashHwid,
   applyRateLimitHeaders,
-  checkBanOrRespond,
+  isBanned,
   banIp
 } = require("../_security");
 
 const DURATION_MS = 24 * 60 * 60 * 1000;
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const MIN_STEP_ELAPSED_MS = 5000;
+const BAN_DURATION_MS = 60 * 60 * 1000;
+
+async function respondBanned(db, ip, res, reason) {
+  const rec = await db.collection("ip_bans").findOne({ ip: ip });
+  return res.status(403).json({
+    error: "Banned",
+    reason: reason,
+    banned: true,
+    expiresAt: rec ? rec.expiresAt : (Date.now() + BAN_DURATION_MS)
+  });
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -30,11 +41,16 @@ module.exports = async function handler(req, res) {
   const clientId = getClientId(req);
   const rate = checkRateLimit("complete", clientId);
   applyRateLimitHeaders(res, rate);
-  if (!rate.allowed) return res.status(429).json({ error: "Too many requests" });
+  if (!rate.allowed) {
+    return res.status(429).json({ error: "Too many requests" });
+  }
 
   const db = await connectDB();
   const ip = getClientIp(req);
-  if (await checkBanOrRespond(db, ip, res)) return;
+
+  if (await isBanned(db, ip)) {
+    return respondBanned(db, ip, res, "already_banned");
+  }
 
   const body = req.body || {};
   const step1Token = typeof body.step1Token === "string" ? body.step1Token : "";
@@ -43,7 +59,7 @@ module.exports = async function handler(req, res) {
   const claim = verify(step1Token);
   if (!claim || !claim.uid || claim.step !== 1 || claim.exp < Date.now()) {
     await banIp(db, ip, "invalid_step1_token");
-    return res.status(401).json({ error: "Invalid or expired step token" });
+    return respondBanned(db, ip, res, "invalid_step1_token");
   }
 
   const gate = db.collection("gate_tokens");
@@ -51,15 +67,15 @@ module.exports = async function handler(req, res) {
 
   if (!record || record.consumed) {
     await banIp(db, ip, "gate_not_started_or_consumed");
-    return res.status(403).json({ error: "Gate already consumed or not started" });
+    return respondBanned(db, ip, res, "gate_not_started_or_consumed");
   }
 
   const now = Date.now();
   const elapsed = now - (record.step1At || 0);
 
   if (elapsed < MIN_STEP_ELAPSED_MS) {
-    await banIp(db, ip, "too_fast_step2", { elapsed });
-    return res.status(403).json({ error: "Too fast, complete the steps properly" });
+    await banIp(db, ip, "too_fast_step2", { elapsed: elapsed });
+    return respondBanned(db, ip, res, "too_fast_step2");
   }
 
   if (record.hwid !== hwid) {
@@ -67,7 +83,7 @@ module.exports = async function handler(req, res) {
       expected: record.hwid,
       got: hwid
     });
-    return res.status(403).json({ error: "HWID mismatch" });
+    return respondBanned(db, ip, res, "hwid_mismatch_gate");
   }
 
   const users = db.collection("users");
@@ -90,7 +106,7 @@ module.exports = async function handler(req, res) {
   if (locked) {
     const unlockAt = Math.max(locked.cooldownUntil || 0, locked.expireAt || 0);
     await gate.updateOne({ discordId: claim.uid }, { $set: { consumed: true } });
-    return res.status(429).json({ error: "Cooldown active", unlockAt });
+    return res.status(429).json({ error: "Cooldown active", unlockAt: unlockAt });
   }
 
   const hwidHash = hashHwid(record.hwid);
@@ -100,14 +116,14 @@ module.exports = async function handler(req, res) {
   const cooldownUntil = now + COOLDOWN_MS;
 
   await keys.insertOne({
-    keyHash,
+    keyHash: keyHash,
     type: record.type,
     discordId: claim.uid,
     username: user.username,
     hwidHash: null,
     issuedAt: now,
-    expireAt,
-    cooldownUntil,
+    expireAt: expireAt,
+    cooldownUntil: cooldownUntil,
     issuedIp: ip,
     issuedFromHwid: hwidHash,
     gateStep1At: record.step1At,
@@ -134,11 +150,11 @@ module.exports = async function handler(req, res) {
     discordId: claim.uid,
     username: user.username,
     type: record.type,
-    hwidHash,
-    ip,
+    hwidHash: hwidHash,
+    ip: ip,
     action: "issued",
     gateElapsedMs: elapsed,
-    expireAt,
+    expireAt: expireAt,
     at: new Date()
   });
 
@@ -146,7 +162,7 @@ module.exports = async function handler(req, res) {
     key: plain,
     type: record.type,
     issuedAt: now,
-    expireAt,
-    cooldownUntil
+    expireAt: expireAt,
+    cooldownUntil: cooldownUntil
   });
 };
