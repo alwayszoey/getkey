@@ -30,6 +30,7 @@
 
   var currentKey = null;
   var timer = null;
+  var banTimer = null;
   var gate = {
     step1Token: null,
     step1Url: null,
@@ -158,6 +159,110 @@
     } catch (e) {}
   }
 
+  function formatBanTime(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var hh = String(Math.floor(s / 3600)).padStart(2, "0");
+    var mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    var ss = String(s % 60).padStart(2, "0");
+    return hh + ":" + mm + ":" + ss;
+  }
+
+  function showBanModal(banInfo) {
+    return new Promise(function (resolve) {
+      var existing = document.getElementById("banModal");
+      if (existing) existing.remove();
+
+      if (banTimer) clearInterval(banTimer);
+
+      var expiresAt = banInfo.expiresAt || (Date.now() + 60 * 60 * 1000);
+
+      var overlay = document.createElement("div");
+      overlay.id = "banModal";
+      overlay.className = "gate-modal-overlay";
+
+      overlay.innerHTML =
+        '<div class="gate-modal ban-modal">' +
+        '  <div class="gate-modal-header">' +
+        '    <div class="gate-modal-icon ban-icon">' +
+        '      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '        <circle cx="12" cy="12" r="10"/>' +
+        '        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>' +
+        '      </svg>' +
+        '    </div>' +
+        '    <div class="gate-modal-title ban-title">Access Blocked</div>' +
+        '    <div class="gate-modal-step ban-reason">IP temporarily banned</div>' +
+        '  </div>' +
+        '  <div class="gate-modal-body">' +
+        '    <p>Your IP has been temporarily blocked because the verification steps were not completed properly.</p>' +
+        '    <div class="ban-counter">' +
+        '      <div class="ban-counter-label">Unban in</div>' +
+        '      <div class="ban-counter-value" id="banTimer">--:--:--</div>' +
+        '    </div>' +
+        '    <div class="gate-modal-note ban-note">' +
+        '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '        <circle cx="12" cy="12" r="10"/>' +
+        '        <path d="M12 16v-4M12 8h.01"/>' +
+        '      </svg>' +
+        '      <span>Do not close the sponsor page early. Complete both steps fully before coming back.</span>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div class="gate-modal-actions">' +
+        '    <button type="button" class="gate-btn gate-btn-primary" data-action="close" style="flex:1;">' +
+        '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '        <path d="M20 6L9 17l-5-5"/>' +
+        '      </svg>' +
+        '      <span>Understood</span>' +
+        '    </button>' +
+        '  </div>' +
+        '</div>';
+
+      document.body.appendChild(overlay);
+
+      requestAnimationFrame(function () {
+        overlay.classList.add("show");
+      });
+
+      var timerEl = overlay.querySelector("#banTimer");
+      timerEl.textContent = formatBanTime(Math.max(0, expiresAt - Date.now()));
+
+      banTimer = setInterval(function () {
+        var left = expiresAt - Date.now();
+        if (left <= 0) {
+          clearInterval(banTimer);
+          banTimer = null;
+          timerEl.textContent = "00:00:00";
+          return;
+        }
+        timerEl.textContent = formatBanTime(left);
+      }, 1000);
+
+      function close() {
+        if (banTimer) {
+          clearInterval(banTimer);
+          banTimer = null;
+        }
+        overlay.style.pointerEvents = "none";
+        overlay.classList.remove("show");
+        setTimeout(function () {
+          overlay.remove();
+          resolve();
+        }, 200);
+      }
+
+      overlay.addEventListener("click", function (e) {
+        var action = e.target.closest("[data-action]");
+        if (action) close();
+      });
+
+      document.addEventListener("keydown", function esc(e) {
+        if (e.key === "Escape") {
+          document.removeEventListener("keydown", esc);
+          close();
+        }
+      });
+    });
+  }
+
   async function loadStatus() {
     var session = Auth.getSession();
     if (!session) return;
@@ -169,10 +274,17 @@
       var res = await fetch("/api/key/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session })
+        body: JSON.stringify({ session: session })
       });
 
       if (res.status === 403) {
+        var bdata = await res.json().catch(function () { return {}; });
+        if (bdata.banned) {
+          showBanModal({
+            reason: bdata.reason,
+            expiresAt: bdata.expiresAt
+          });
+        }
         paintKey(null);
         stopTimer();
         return;
@@ -209,7 +321,6 @@
   function openExternal(url) {
     if (!url) return;
     if (document.getElementById("gateModal")) return;
-
     window.location.href = url;
   }
 
@@ -305,17 +416,20 @@
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) {
-          if (res.status === 403 && data.reason) {
-            throw new Error("Banned: " + data.reason);
+          if (res.status === 403 && (data.banned || data.reason)) {
+            showBanModal({
+              reason: data.reason || "policy_violation",
+              expiresAt: data.expiresAt || (Date.now() + 60 * 60 * 1000)
+            });
+            var err = new Error("Banned");
+            err.__banned = true;
+            throw err;
           }
           throw new Error(data.error || "Failed to start (HTTP " + res.status + ")");
         }
 
         if (!data.linkvertiseStep1 || !data.linkvertiseStep2) {
-          throw new Error(
-            "Gate is not configured. Admin must set " +
-            "LINKVERTISE_STEP1_URL and LINKVERTISE_STEP2_URL in Vercel, then redeploy."
-          );
+          throw new Error("Gate is not configured");
         }
 
         gate.step1Token = data.step1Token;
@@ -341,8 +455,14 @@
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) {
-          if (res.status === 403 && data.reason) {
-            throw new Error("Banned: " + data.reason);
+          if (res.status === 403 && (data.banned || data.reason)) {
+            showBanModal({
+              reason: data.reason || "policy_violation",
+              expiresAt: data.expiresAt || (Date.now() + 60 * 60 * 1000)
+            });
+            var err = new Error("Banned");
+            err.__banned = true;
+            throw err;
           }
           throw new Error(data.error || "Failed to complete");
         }
@@ -443,6 +563,11 @@
           }).catch(function (err) {
             clearGateState();
             delete btn.dataset.gateStage;
+            if (err && err.__banned) {
+              btnText.textContent = "Get key";
+              setLoading(false);
+              return;
+            }
             alert(err.message || "Failed to claim key");
             stopTimer();
           });
@@ -469,6 +594,11 @@
         }).catch(function (err) {
           clearGateState();
           delete btn.dataset.gateStage;
+          if (err && err.__banned) {
+            btnText.textContent = "Get key";
+            setLoading(false);
+            return;
+          }
           alert(err.message || "Failed to claim key");
           stopTimer();
         });
@@ -550,6 +680,7 @@
       setLoading(false);
       btn.disabled = false;
       btnText.textContent = "Get key";
+      if (err && err.__banned) return;
       alert(err.message || "Network error");
     });
   });
