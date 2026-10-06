@@ -8,12 +8,12 @@ if (!SECRET || SECRET.length < 32) {
 
 const RATE_LIMITS = {
   exchange: { window: 60 * 1000, max: 10 },
-  start:    { window: 60 * 1000, max: 5 },
+  start: { window: 60 * 1000, max: 5 },
   complete: { window: 60 * 1000, max: 5 },
-  issue:    { window: 60 * 1000, max: 5 },
-  verify:   { window: 60 * 1000, max: 20 },
-  status:   { window: 60 * 1000, max: 30 },
-  reset:    { window: 60 * 1000, max: 3 }
+  issue: { window: 60 * 1000, max: 5 },
+  verify: { window: 60 * 1000, max: 20 },
+  status: { window: 60 * 1000, max: 30 },
+  reset: { window: 60 * 1000, max: 3 }
 };
 
 const BAN_COLLECTION = "ip_bans";
@@ -22,16 +22,18 @@ const BAN_DURATION_MS = 60 * 60 * 1000;
 const buckets = new Map();
 
 function prune(now) {
-  for (const [key, entry] of buckets) {
+  for (const entry of buckets.values()) {
     if (now - entry.start > entry.window * 2) {
-      buckets.delete(key);
+      buckets.delete(entry.key);
     }
   }
 }
 
 function checkRateLimit(scope, identifier) {
   const rule = RATE_LIMITS[scope];
-  if (!rule) throw new Error("Unknown rate limit scope: " + scope);
+  if (!rule) {
+    throw new Error("Unknown rate limit scope: " + scope);
+  }
 
   const now = Date.now();
   prune(now);
@@ -40,7 +42,7 @@ function checkRateLimit(scope, identifier) {
   let entry = buckets.get(key);
 
   if (!entry || now - entry.start > rule.window) {
-    entry = { start: now, count: 0, window: rule.window };
+    entry = { key: key, start: now, count: 0, window: rule.window };
     buckets.set(key, entry);
   }
 
@@ -50,7 +52,7 @@ function checkRateLimit(scope, identifier) {
   const remaining = Math.max(0, rule.max - entry.count);
   const resetAt = entry.start + rule.window;
 
-  return { allowed, remaining, resetAt, limit: rule.max };
+  return { allowed: allowed, remaining: remaining, resetAt: resetAt, limit: rule.max };
 }
 
 function getClientIp(req) {
@@ -77,7 +79,9 @@ function verify(token) {
   }
 
   const parts = token.split(".");
-  if (parts.length !== 2) return null;
+  if (parts.length !== 2) {
+    return null;
+  }
 
   const b64 = parts[0];
   const sig = parts[1];
@@ -90,19 +94,24 @@ function verify(token) {
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
 
-  if (a.length !== b.length) return null;
-  if (!crypto.timingSafeEqual(a, b)) return null;
+  if (a.length !== b.length) {
+    return null;
+  }
+
+  if (!crypto.timingSafeEqual(a, b)) {
+    return null;
+  }
 
   try {
     return JSON.parse(Buffer.from(b64, "base64url").toString("utf8"));
-  } catch (e) {
+  } catch (err) {
     return null;
   }
 }
 
 function generateKey(type) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const seg = (n) => {
+  const seg = function (n) {
     let s = "";
     for (let i = 0; i < n; i++) {
       s += chars[crypto.randomInt(0, chars.length)];
@@ -131,22 +140,30 @@ function applyRateLimitHeaders(res, rate) {
 }
 
 async function isBanned(db, ip) {
-  if (!ip || ip === "unknown") return false;
+  if (!ip || ip === "unknown") {
+    return false;
+  }
+
   const now = Date.now();
   const record = await db.collection(BAN_COLLECTION).findOne({
     ip: ip,
     expiresAt: { $gt: now }
   });
-  return !!record;
+
+  return Boolean(record);
 }
 
 async function banIp(db, ip, reason, meta) {
-  if (!ip || ip === "unknown") return;
+  if (!ip || ip === "unknown") {
+    return;
+  }
+
   const now = Date.now();
+
   await db.collection(BAN_COLLECTION).updateOne(
     { ip: ip },
     {
-      {
+      $set: {
         ip: ip,
         reason: reason || "policy_violation",
         meta: meta || {},
@@ -160,31 +177,35 @@ async function banIp(db, ip, reason, meta) {
 
 async function checkBanOrRespond(db, ip, res) {
   const banned = await isBanned(db, ip);
-  if (banned) {
-    const now = Date.now();
-    const record = await db.collection(BAN_COLLECTION).findOne({ ip: ip });
-    const remain = record ? Math.max(0, record.expiresAt - now) : BAN_DURATION_MS;
-    res.status(403).json({
-      error: "Temporarily banned",
-      reason: record ? record.reason : "policy_violation",
-      retryAfterMs: remain
-    });
-    return true;
+
+  if (!banned) {
+    return false;
   }
-  return false;
+
+  const now = Date.now();
+  const record = await db.collection(BAN_COLLECTION).findOne({ ip: ip });
+  const remain = record ? Math.max(0, record.expiresAt - now) : BAN_DURATION_MS;
+
+  res.status(403).json({
+    error: "Temporarily banned",
+    reason: record ? record.reason : "policy_violation",
+    retryAfterMs: remain
+  });
+
+  return true;
 }
 
 module.exports = {
-  checkRateLimit,
-  getClientIp,
-  getClientId,
-  sign,
-  verify,
-  generateKey,
-  hashKey,
-  hashHwid,
-  applyRateLimitHeaders,
-  isBanned,
-  banIp,
-  checkBanOrRespond
+  checkRateLimit: checkRateLimit,
+  getClientIp: getClientIp,
+  getClientId: getClientId,
+  sign: sign,
+  verify: verify,
+  generateKey: generateKey,
+  hashKey: hashKey,
+  hashHwid: hashHwid,
+  applyRateLimitHeaders: applyRateLimitHeaders,
+  isBanned: isBanned,
+  banIp: banIp,
+  checkBanOrRespond: checkBanOrRespond
 };
